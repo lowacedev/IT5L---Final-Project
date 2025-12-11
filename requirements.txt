@@ -1,0 +1,6 @@
+PyQt6==6.10.0
+PyQt6-WebEngine==6.10.0
+mysql-connector-python==8.1.0
+python-dotenv==1.0.0
+plotly>=5.14.0
+kaleido>=0.2.1

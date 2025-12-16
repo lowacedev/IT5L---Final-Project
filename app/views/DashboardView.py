@@ -31,7 +31,9 @@ class DashboardView(QWidget):  # MATPLOTLIB VERSION ONLY
         kpi_grid.setSpacing(20)
 
         # Create KPI cards
-        kpi1 = self.make_kpi_card("Today's Sales", "Php 0.00", "SALES", attr_name='kpi_sales_label')
+        kpi1 = self.make_kpi_card("Today's Sales", "Php 0.00", "SALES", 
+                                   attr_name='kpi_sales_label', 
+                                   comparison_attr='kpi_sales_comparison_label')
         kpi2 = self.make_kpi_card("Transactions", "0", "TRANS", attr_name='kpi_transactions_label')
         kpi3 = self.make_kpi_card("Total Products", "0", "ITEMS", attr_name='kpi_total_products_label')
 
@@ -103,7 +105,7 @@ class DashboardView(QWidget):  # MATPLOTLIB VERSION ONLY
         except Exception as e:
             print(f"[DASHBOARD] Failed to initialize reports model: {e}")
 
-    def make_kpi_card(self, title, value, icon, attr_name=None):
+    def make_kpi_card(self, title, value, icon, attr_name=None, comparison_attr=None):
         """Create a KPI card widget."""
         card = QFrame()
         card.setObjectName("kpi_card")
@@ -134,6 +136,13 @@ class DashboardView(QWidget):  # MATPLOTLIB VERSION ONLY
 
         card_layout.addLayout(header_layout)
         card_layout.addWidget(value_label)
+        
+        # Comparison label (optional)
+        if comparison_attr:
+            comparison_label = QLabel("")
+            comparison_label.setStyleSheet("font-size: 12px; font-weight: bold;")
+            setattr(self, comparison_attr, comparison_label)
+            card_layout.addWidget(comparison_label)
 
         return card
 
@@ -263,4 +272,3 @@ class DashboardView(QWidget):  # MATPLOTLIB VERSION ONLY
 
         except Exception as e:
             print(f"[DASHBOARD] load_top_items_chart error: {e}")
-

@@ -177,6 +177,23 @@ class ReportsModel:
             print(f"[REPORTS MODEL ERROR] get_daily_summary: {e}")
             return None
 
+    def get_daily_revenue(self, date):
+        """Get total revenue for a specific day."""
+        try:
+            cursor = self.conn.cursor()
+            query = """
+                SELECT COALESCE(SUM(total), 0) as total_revenue
+                FROM sales
+                WHERE DATE(sale_date) = %s
+            """
+            cursor.execute(query, (date,))
+            data = cursor.fetchone()
+            cursor.close()
+            return float(data[0]) if data and data[0] is not None else 0.0
+        except Exception as e:
+            print(f"[REPORTS MODEL ERROR] get_daily_revenue: {e}")
+            return 0.0
+
     def get_category_performance(self):
         """Get sales performance by category."""
         try:

@@ -129,8 +129,8 @@ class ReportsController:
             filename, _ = QFileDialog.getSaveFileName(
                 self.view,
                 "Export Sales Report",
-                f"sales_report_{start_date}_to_{end_date}.csv",
-                "CSV Files (*.csv)"
+                f"sales_report_{start_date}_to_{end_date}.xlsx",
+                "Excel Files (*.xlsx);;CSV Files (*.csv)"
             )
             
             if not filename:
@@ -143,8 +143,15 @@ class ReportsController:
                 QMessageBox.information(self.view, "No Data", "No sales data found for the selected period.")
                 return
             
-            # Export to CSV
-            self.view.export_to_csv(data, filename)
+            # Export to XLSX if requested, otherwise CSV fallback
+            try:
+                if filename.lower().endswith('.xlsx'):
+                    self.view.export_to_xlsx(data, filename)
+                else:
+                    self.view.export_to_csv(data, filename)
+            except AttributeError:
+                # In case view is missing the xlsx method, fallback to CSV
+                self.view.export_to_csv(data, filename)
             print(f"[REPORTS CONTROLLER] Exported {len(data)} records to {filename}")
             
         except Exception as e:

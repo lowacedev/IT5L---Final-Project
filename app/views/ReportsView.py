@@ -5,6 +5,14 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtCore import QDate, Qt
 from datetime import datetime, timedelta
 import csv
+try:
+    import openpyxl
+    from openpyxl.utils import get_column_letter
+    from openpyxl.styles import Alignment
+    from openpyxl.styles.numbers import FORMAT_NUMBER_00
+    OPENPYXL_AVAILABLE = True
+except Exception:
+    OPENPYXL_AVAILABLE = False
 
 class ReportsView(QWidget):
     def __init__(self):
@@ -322,3 +330,96 @@ class ReportsView(QWidget):
             QMessageBox.information(None, "Success", f"Report exported to {filename}")
         except Exception as e:
             QMessageBox.critical(None, "Error", f"Failed to export: {str(e)}")
+
+    def export_to_xlsx(self, data, filename):
+        """Export data to XLSX (Excel) with proper types and column widths."""
+        if not OPENPYXL_AVAILABLE:
+            QMessageBox.critical(self, "Dependency Missing", "openpyxl is not installed. Please install openpyxl and try again.")
+            return
+
+        try:
+            wb = openpyxl.Workbook()
+            ws = wb.active
+            ws.title = "Sales Report"
+
+            headers = ["Transaction ID", "Sale Date", "Transaction Total", "Cashier", "Part Name", "Quantity", "Unit Price", "Line Total"]
+            ws.append(headers)
+
+     
+            col_widths = [len(h) for h in headers]
+
+            for record in data:
+           
+                tx_id = record[0]
+                sale_dt = record[1]
+                tx_total = record[2]
+                cashier = record[3]
+                part_name = record[4]
+                qty = record[5]
+                unit_price = record[6]
+                line_total = record[7]
+
+                # Try to coerce sale_dt to a datetime if it's a string
+                if isinstance(sale_dt, str):
+                    try:
+                        # Try common formats
+                        sale_dt_val = datetime.fromisoformat(sale_dt)
+                    except Exception:
+                        try:
+                            sale_dt_val = datetime.strptime(sale_dt, "%Y-%m-%d %H:%M:%S")
+                        except Exception:
+                            sale_dt_val = sale_dt
+                else:
+                    sale_dt_val = sale_dt
+
+                row = [tx_id, sale_dt_val, tx_total, cashier, part_name, qty, unit_price, line_total]
+                ws.append(row)
+
+                # update widths
+                for i, value in enumerate(row):
+                    text = str(value) if value is not None else ""
+                    if len(text) > col_widths[i]:
+                        col_widths[i] = len(text)
+
+            # Apply formatting for numeric columns and date column
+            for row in ws.iter_rows(min_row=2, min_col=1, max_col=ws.max_column):
+                # Sale Date is column 2
+                cell_date = row[1]
+                try:
+                    if isinstance(cell_date.value, datetime):
+                        cell_date.number_format = 'yyyy-mm-dd hh:mm:ss'
+                except Exception:
+                    pass
+
+            # Apply number format for currency/number columns: Transaction Total (3), Unit Price (7), Line Total (8) using 1-based index
+            for r in ws.iter_rows(min_row=2, min_col=1, max_col=ws.max_column):
+                try:
+                    # transaction total at index 3 (0-based 2)
+                    if isinstance(r[2].value, (int, float)):
+                        r[2].number_format = FORMAT_NUMBER_00
+                    # quantity at index 5
+                    if isinstance(r[5].value, (int, float)):
+                        r[5].number_format = FORMAT_NUMBER_00
+                    # unit price index 6
+                    if isinstance(r[6].value, (int, float)):
+                        r[6].number_format = FORMAT_NUMBER_00
+                    # line total index 7
+                    if isinstance(r[7].value, (int, float)):
+                        r[7].number_format = FORMAT_NUMBER_00
+                except Exception:
+                    pass
+
+            # Set column widths
+            for i, width in enumerate(col_widths, start=1):
+                col_letter = get_column_letter(i)
+                # Set a minimum width and add some padding
+                ws.column_dimensions[col_letter].width = max(10, width + 2)
+
+            # Align headers center
+            for cell in ws[1]:
+                cell.alignment = Alignment(horizontal='center')
+
+            wb.save(filename)
+            QMessageBox.information(self, "Success", f"Report exported to {filename}")
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Failed to export XLSX: {str(e)}")

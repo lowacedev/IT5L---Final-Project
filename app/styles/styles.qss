@@ -368,7 +368,7 @@ QScrollBar::add-line, QScrollBar::sub-line {
 }
 
 #total_label {
-    font-size: 32px;
+    font-size: 16px;
     font-weight: 700;
     color: #111827;
     padding: 10px;

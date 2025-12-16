@@ -164,46 +164,89 @@ class POSController:
             self.view.clear_cart()
 
     def update_total(self):
-        """Update the total amount."""
-        total = sum(item["price"] * item["qty"] for item in self.cart)
+        """Update the total amount with VAT calculation."""
+        subtotal = sum(item["price"] * item["qty"] for item in self.cart)
+        vat_amount = subtotal * 0.12  # 12% VAT
+        total = subtotal + vat_amount
+        
+        self.view.subtotal_label.setText(f"Subtotal: Php {subtotal:,.2f}")
+        self.view.vat_label.setText(f"VAT (12%): Php {vat_amount:,.2f}")
         self.view.total_label.setText(f"Total: Php {total:,.2f}")
 
     def checkout(self):
-        """Process the checkout."""
+        """Process the checkout with payment and receipt."""
         print("[POS CONTROLLER] checkout() called")
         if not self.cart:
             QMessageBox.warning(self.view, "Empty Cart", "Cart is empty.")
             return
 
         try:
-            total = sum(item["price"] * item["qty"] for item in self.cart)
+            subtotal = sum(item["price"] * item["qty"] for item in self.cart)
             
-            # Confirm checkout
-            reply = QMessageBox.question(
-                self.view,
-                "Confirm Checkout",
-                f"Total Amount: Php {total:,.2f}\n\nProceed with checkout?",
-                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+            # Open payment/receipt dialog
+            from app.views.CheckoutReceiptDialog import CheckoutReceiptDialog
+            cashier_name = self.user.get('username') if self.user else None
+            
+            checkout_dialog = CheckoutReceiptDialog(
+                items=self.cart,
+                subtotal=subtotal,
+                cashier_name=cashier_name,
+                parent=self.view
             )
             
-            if reply != QMessageBox.StandardButton.Yes:
+            if checkout_dialog.exec() != CheckoutReceiptDialog.DialogCode.Accepted:
                 return
             
-            # Save transaction (include user id if available)
+            # Get payment details
+            payment_details = checkout_dialog.get_payment_details()
+            vat_amount = payment_details['vat_amount']
+            total = payment_details['total']
+            payment_mode = payment_details['payment_mode']
+            amount_received = payment_details['amount_received']
+            change = payment_details['change']
+            
+            # Validate payment
+            if amount_received < total:
+                QMessageBox.warning(
+                    self.view,
+                    "Insufficient Payment",
+                    f"Amount received (Php {amount_received:,.2f}) is less than total (Php {total:,.2f})"
+                )
+                return
+            
+            # Save transaction with payment details
             user_id = None
             try:
                 user_id = self.user.get('id') if self.user else None
             except Exception:
                 user_id = None
 
-            self.model.save_transaction(self.cart, total, user_id)
-            
-            # Show success
-            QMessageBox.information(
-                self.view,
-                "Success",
-                f"Transaction completed!\nTotal: Php {total:,.2f}"
+            sale_id = self.model.save_transaction(
+                items=self.cart,
+                total=total,
+                user_id=user_id,
+                vat_amount=vat_amount,
+                payment_mode=payment_mode,
+                amount_received=amount_received,
+                change=change
             )
+            
+            # Show success with receipt
+            # Show receipt dialog with option to save PDF
+            from app.views.ReceiptDisplayDialog import ReceiptDisplayDialog
+            receipt_dialog = ReceiptDisplayDialog(
+                sale_id=sale_id,
+                items=self.cart,
+                subtotal=subtotal,
+                vat_amount=vat_amount,
+                total=total,
+                payment_mode=payment_mode,
+                amount_received=amount_received,
+                change=change,
+                cashier_name=self.user.get('username') if self.user else None,
+                parent=self.view
+            )
+            receipt_dialog.exec()
             
             # Clear cart
             self.cart.clear()
@@ -214,4 +257,7 @@ class POSController:
             self.load_all_items()
             
         except Exception as e:
+            print(f"[POS CONTROLLER ERROR] checkout: {e}")
+            import traceback
+            traceback.print_exc()
             QMessageBox.critical(self.view, "Error", f"Checkout failed: {str(e)}")

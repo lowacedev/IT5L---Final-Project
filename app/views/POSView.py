@@ -31,7 +31,7 @@ class POSView(QWidget):
         self.search_box.setPlaceholderText("Search by part name...")
         self.search_box.returnPressed.connect(lambda: self.search_btn.click())
         
-        self.search_btn = QPushButton("🔍 Search")
+        self.search_btn = QPushButton(" Search")
         self.search_btn.setObjectName("search_button")
         
         search_row.addWidget(self.search_box)
@@ -68,7 +68,7 @@ class POSView(QWidget):
         cart_label.setObjectName("section_title")
         
         self.clear_cart_btn = QPushButton("Clear Cart")
-        self.clear_cart_btn.setObjectName("danger_button")
+        self.clear_cart_btn.setObjectName("search_button")
         
         cart_header.addWidget(cart_label)
         cart_header.addStretch()
@@ -118,9 +118,20 @@ class POSView(QWidget):
         total_layout = QVBoxLayout(total_frame)
         total_layout.setContentsMargins(15, 15, 15, 15)
 
+        self.subtotal_label = QLabel("Subtotal: Php 0.00")
+        self.subtotal_label.setObjectName("total_label")
+        self.subtotal_label.setAlignment(Qt.AlignmentFlag.AlignRight)
+        total_layout.addWidget(self.subtotal_label)
+
+        self.vat_label = QLabel("VAT (12%): Php 0.00")
+        self.vat_label.setObjectName("total_label")
+        self.vat_label.setAlignment(Qt.AlignmentFlag.AlignRight)
+        total_layout.addWidget(self.vat_label)
+
         self.total_label = QLabel("Total: Php 0.00")
         self.total_label.setObjectName("total_label")
         self.total_label.setAlignment(Qt.AlignmentFlag.AlignRight)
+        self.total_label.setStyleSheet("font-weight: bold; font-size: 26px;")
         total_layout.addWidget(self.total_label)
 
         self.checkout_btn = QPushButton(" Checkout")
@@ -182,5 +193,7 @@ class POSView(QWidget):
     def clear_cart(self):
         """Clear all items from cart."""
         self.cart_table.setRowCount(0)
+        self.subtotal_label.setText("Subtotal: Php 0.00")
+        self.vat_label.setText("VAT (12%): Php 0.00")
         self.total_label.setText("Total: Php 0.00")
         self.qty_input.clear()

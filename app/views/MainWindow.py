@@ -169,7 +169,7 @@ class MainWindow(QMainWindow):
             db = get_db()
             view = InventoryView(supplier_model=SupplierModel(db))
             model = InventoryModel(db)
-            self.inventory_controller = InventoryController(model, view)
+            self.inventory_controller = InventoryController(model, view, current_user=self.user)
             
             self.stack.addWidget(view)
         except Exception as e:

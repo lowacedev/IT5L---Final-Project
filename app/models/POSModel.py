@@ -38,17 +38,22 @@ class POSModel:
             print(f"[POS MODEL ERROR] search_item: {e}")
             return []
 
-    def save_transaction(self, items, total, user_id=None):
+    def save_transaction(self, items, total, user_id=None, vat_amount=0, payment_mode=None, amount_received=0, change=0):
         """Save a sale transaction and update stock.
 
         user_id: optional integer id of the cashier/user who processed the sale.
+        vat_amount: VAT amount (12% of subtotal).
+        payment_mode: Payment method ('Cash', 'Card', 'Gcash').
+        amount_received: Amount tendered by customer.
+        change: Change to give back to customer.
         """
         try:
-            print(f"[POS MODEL] Saving transaction with {len(items)} items, total: Php {total:,.2f}")
+            print(f"[POS MODEL] Saving transaction with {len(items)} items, total: Php {total:,.2f}, VAT: Php {vat_amount:,.2f}, Mode: {payment_mode}")
             
-            # Insert sale (let sale_date default to CURRENT_TIMESTAMP if column exists)
-            sql_sale = "INSERT INTO sales (total, user_id) VALUES (%s, %s)"
-            self.cursor.execute(sql_sale, (total, user_id))
+            # Insert sale with payment details
+            sql_sale = """INSERT INTO sales (total, user_id, vat_amount, payment_mode, amount_received, change_amount) 
+                         VALUES (%s, %s, %s, %s, %s, %s)"""
+            self.cursor.execute(sql_sale, (total, user_id, vat_amount, payment_mode, amount_received, change))
             sale_id = self.cursor.lastrowid
             print(f"[POS MODEL] Created sale with ID: {sale_id}")
 

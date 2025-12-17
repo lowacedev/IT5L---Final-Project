@@ -5,7 +5,7 @@ Project POS built with PyQt6, MySQL (XAMPP). Includes login, dashboard, inventor
 
 ## Requirements
 - Python 3.10+
-- XAMPP MySQL (optional). If not available, app runs in **demo mode** with sample data.
+- XAMPP MySQL
 - Install dependencies:
 ```bash
 pip install -r requirements.txt

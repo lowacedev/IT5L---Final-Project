@@ -19,7 +19,7 @@ class MainWindow(QMainWindow):
         super().__init__()
         
         self.user = user or {"username": "admin", "role": "admin"}
-        self.setWindowTitle("Computer Parts POS System")
+        self.setWindowTitle("TechBayan")
         self.resize(1400, 800)
         
         # Load stylesheet

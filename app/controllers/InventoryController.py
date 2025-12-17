@@ -10,7 +10,6 @@ class InventoryController:
         # Inventory tab signals
         self.view.add_btn.clicked.connect(self.add_item)
         self.view.update_btn.clicked.connect(self.update_item)
-        self.view.delete_btn.clicked.connect(self.delete_item)
         self.view.refresh_btn.clicked.connect(self.refresh_inventory)
         self.view.search_btn.clicked.connect(self.search_inventory)
         self.view.search_box.returnPressed.connect(self.search_inventory)
@@ -88,32 +87,6 @@ class InventoryController:
         except Exception as e:
             print(f"[INVENTORY CONTROLLER ERROR] update_item: {e}")
             QMessageBox.critical(self.view, "Error", f"Failed to update item: {str(e)}")
-
-    def delete_item(self):
-        """Delete selected inventory item."""
-        print("[INVENTORY CONTROLLER] delete_item() called")
-        try:
-            item_id = self.view.get_selected_id()
-            if not item_id:
-                QMessageBox.warning(self.view, "Warning", "Please select an item to delete")
-                return
-            
-            # Confirm deletion
-            reply = QMessageBox.question(
-                self.view,
-                "Confirm Delete",
-                "Are you sure you want to delete this item?",
-                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
-            )
-            
-            if reply == QMessageBox.StandardButton.Yes:
-                self.model.delete_item(item_id)
-                self.view.clear_form()
-                self.refresh_inventory()
-                QMessageBox.information(self.view, "Success", "Item deleted successfully")
-        except Exception as e:
-            print(f"[INVENTORY CONTROLLER ERROR] delete_item: {e}")
-            QMessageBox.critical(self.view, "Error", f"Failed to delete item: {str(e)}")
 
     def search_inventory(self):
         """Search inventory by keyword."""

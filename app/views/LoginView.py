@@ -8,7 +8,7 @@ class LoginView(QDialog):
     def __init__(self, auth_controller, parent=None):
         super().__init__(parent)
         self.auth_controller = auth_controller
-        self.setWindowTitle("POS — Login")
+        self.setWindowTitle("TechBayan")
         self.setFixedSize(400, 500)
         self.setup_ui()
         self.setStyleSheet(open("app/styles/styles.qss").read())

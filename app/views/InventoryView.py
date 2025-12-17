@@ -194,7 +194,7 @@ class InventoryView(QWidget):
 
         form_layout.addLayout(form_grid)
 
-        # Action Buttons
+        # Action Buttons (without delete button)
         btn_row = QHBoxLayout()
         btn_row.setSpacing(10)
         
@@ -208,10 +208,6 @@ class InventoryView(QWidget):
         self.update_btn.setObjectName("update_button")
         print(f"[VIEW] update_btn created: {self.update_btn}")
         
-        self.delete_btn = QPushButton("Delete")
-        self.delete_btn.setObjectName("danger_button")
-        print(f"[VIEW] delete_btn created: {self.delete_btn}")
-        
         self.clear_btn = QPushButton("Clear Form")
         self.clear_btn.setObjectName("secondary_button")
         print(f"[VIEW] clear_btn created: {self.clear_btn}")
@@ -223,7 +219,6 @@ class InventoryView(QWidget):
 
         btn_row.addWidget(self.add_btn)
         btn_row.addWidget(self.update_btn)
-        btn_row.addWidget(self.delete_btn)
         btn_row.addWidget(self.clear_btn)
         btn_row.addStretch()
 
@@ -468,10 +463,7 @@ class InventoryView(QWidget):
         try:
             suppliers = self.supplier_model.fetch_all()
             self.supplier_dropdown.clear()
-            self.supplier_dropdown.addItem("", None)  # Empty item for "select supplier"
-
-            # SupplierModel.fetch_all may return full rows (id, name, ...).
-            # Safely extract id and name from each row.
+            self.supplier_dropdown.addItem("", None)  
             for row in suppliers:
                 if not row:
                     continue

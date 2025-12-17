@@ -14,18 +14,17 @@ class Sidebar(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
 
-        # Logo/Title area
         title_widget = QWidget()
         title_widget.setObjectName("sidebar_header")
         title_layout = QVBoxLayout(title_widget)
         title_layout.setContentsMargins(20, 20, 20, 20)
         title_layout.setSpacing(6)
 
-        # Logo label (loads image from app/assets/images)
+        
         logo_label = QLabel()
         logo_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         logo_label.setObjectName("sidebar_logo")
-        # Build path relative to this file to ensure it works on different working dirs
+        
         logo_path = os.path.normpath(os.path.join(os.path.dirname(__file__), '..', 'assets', 'images', 'techbayanlogo.jpg'))
         if os.path.exists(logo_path):
             pix = QPixmap(logo_path)

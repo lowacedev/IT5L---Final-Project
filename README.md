@@ -1,7 +1,7 @@
-# Computer Parts POS — PyQt6 (Minimal runnable)
+# TechBayan - Computer Parts POS 
 
 ## Overview
-Minimal POS demo built with PyQt6, MySQL (XAMPP), and MVC structure. Includes login, dashboard, basic POS skeleton.
+Project POS built with PyQt6, MySQL (XAMPP). Includes login, dashboard, inventory, POS, reports, staff and supplier management.
 
 ## Requirements
 - Python 3.10+

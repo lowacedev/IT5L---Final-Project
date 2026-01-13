@@ -2,7 +2,7 @@ class POSModel:
     def __init__(self, db):
         self.db = db
         self.cursor = db.cursor()
-        print("[POS MODEL] POSModel initialized")
+        
 
     def fetch_all(self):
         """Fetch all inventory items for initial display."""
@@ -50,14 +50,14 @@ class POSModel:
         try:
             print(f"[POS MODEL] Saving transaction with {len(items)} items, total: Php {total:,.2f}, VAT: Php {vat_amount:,.2f}, Mode: {payment_mode}")
             
-            # Insert sale with payment details
+            
             sql_sale = """INSERT INTO sales (total, user_id, vat_amount, payment_mode, amount_received, change_amount) 
                          VALUES (%s, %s, %s, %s, %s, %s)"""
             self.cursor.execute(sql_sale, (total, user_id, vat_amount, payment_mode, amount_received, change))
             sale_id = self.cursor.lastrowid
             print(f"[POS MODEL] Created sale with ID: {sale_id}")
 
-            # Insert sale items and update stock
+            
             sql_item = """
                 INSERT INTO sale_items (sale_id, item_id, quantity, price)
                 VALUES (%s, %s, %s, %s)
@@ -69,7 +69,7 @@ class POSModel:
             """
             
             for item in items:
-                # Add to sale_items
+               
                 self.cursor.execute(sql_item, (
                     sale_id, 
                     item["id"], 
@@ -77,7 +77,7 @@ class POSModel:
                     item["price"]
                 ))
                 
-                # Decrease stock
+               
                 self.cursor.execute(sql_update_stock, (
                     item["qty"], 
                     item["id"]

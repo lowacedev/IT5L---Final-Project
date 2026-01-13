@@ -1,4 +1,5 @@
 from PyQt6.QtWidgets import QMessageBox
+import re
 
 class POSController:
     def __init__(self, model, view, user=None):
@@ -60,8 +61,11 @@ class POSController:
         try:
             item_id = int(self.view.results_table.item(row, 0).text())
             name = self.view.results_table.item(row, 1).text()
-            price = float(self.view.results_table.item(row, 2).text())
-            stock = int(self.view.results_table.item(row, 3).text())
+            # Parse price and stock safely (strip currency symbols and commas)
+            price_text = self.view.results_table.item(row, 2).text()
+            stock_text = self.view.results_table.item(row, 3).text()
+            price = float(re.sub(r"[^\d.\-]", "", price_text)) if price_text else 0.0
+            stock = int(re.sub(r"[^\d-]", "", stock_text)) if stock_text else 0
             
             print(f"[POS CONTROLLER] Adding {name} (ID: {item_id}, Price: Php {price}, Stock: {stock})")
             
@@ -83,7 +87,7 @@ class POSController:
                     self.update_total()
                     return
 
-            # Add new item to cart
+          
             self.cart.append({
                 "id": item_id,
                 "name": name,

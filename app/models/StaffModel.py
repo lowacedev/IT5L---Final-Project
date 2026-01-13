@@ -6,7 +6,7 @@ class StaffModel:
         self.db = db
 
     def fetch_all(self):
-        """Fetch all staff/users."""
+       
         try:
             cursor = self.db.cursor()
             cursor.execute("""

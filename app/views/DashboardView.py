@@ -4,13 +4,12 @@ from PyQt6.QtCore import Qt
 from datetime import datetime, timedelta
 from app.models.ReportsModel import ReportsModel
 
-# Matplotlib for static charts
 from matplotlib.figure import Figure
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
 import matplotlib.pyplot as plt
 
 
-class DashboardView(QWidget):  # MATPLOTLIB VERSION ONLY
+class DashboardView(QWidget):  
     def __init__(self, db, user):
         super().__init__()
         self.db = db
@@ -31,9 +30,7 @@ class DashboardView(QWidget):  # MATPLOTLIB VERSION ONLY
         kpi_grid.setSpacing(20)
 
         # Create KPI cards
-        kpi1 = self.make_kpi_card("Today's Sales", "Php 0.00", "SALES", 
-                                   attr_name='kpi_sales_label', 
-                                   comparison_attr='kpi_sales_comparison_label')
+        kpi1 = self.make_kpi_card("Today's Sales", "Php 0.00", "SALES", attr_name='kpi_sales_label')
         kpi2 = self.make_kpi_card("Transactions", "0", "TRANS", attr_name='kpi_transactions_label')
         kpi3 = self.make_kpi_card("Total Products", "0", "ITEMS", attr_name='kpi_total_products_label')
 
@@ -66,9 +63,15 @@ class DashboardView(QWidget):  # MATPLOTLIB VERSION ONLY
 
         # Matplotlib canvas for sales trend - responsive sizing
         self.fig_sales = Figure(figsize=(6.5, 3.5), dpi=80)
-        self.fig_sales.patch.set_facecolor('#F9FAFB')
+        # Use white figure background so the chart blends with app backgrounds
+        self.fig_sales.patch.set_facecolor('#FFFFFF')
         self.canvas_sales = FigureCanvas(self.fig_sales)
         self.canvas_sales.setMinimumHeight(320)
+        # Ensure the Qt widget background matches the figure
+        try:
+            self.canvas_sales.setStyleSheet('background-color: white;')
+        except Exception:
+            pass
         left_chart_layout.addWidget(self.canvas_sales, 1)
 
         charts_container.addWidget(left_chart_frame, 1)
@@ -86,9 +89,13 @@ class DashboardView(QWidget):  # MATPLOTLIB VERSION ONLY
 
         # Matplotlib canvas for top items - responsive sizing
         self.fig_items = Figure(figsize=(6.5, 3.5), dpi=80)
-        self.fig_items.patch.set_facecolor('#F9FAFB')
+        self.fig_items.patch.set_facecolor('#FFFFFF')
         self.canvas_items = FigureCanvas(self.fig_items)
         self.canvas_items.setMinimumHeight(320)
+        try:
+            self.canvas_items.setStyleSheet('background-color: white;')
+        except Exception:
+            pass
         right_chart_layout.addWidget(self.canvas_items, 1)
 
         charts_container.addWidget(right_chart_frame, 1)
@@ -115,20 +122,26 @@ class DashboardView(QWidget):  # MATPLOTLIB VERSION ONLY
 
         # Icon and Title
         header_layout = QHBoxLayout()
-
-        icon_label = QLabel(icon)
-        icon_label.setStyleSheet("font-size: 12px; font-weight: bold; color: #3B82F6;")
+        # For the main KPIs we don't want the blue short-icon text (SALES/TRANS/ITEMS),
+        # so only add the icon label when it's not one of those tokens.
+        icon_label = None
+        if icon not in ("SALES", "TRANS", "ITEMS"):
+            icon_label = QLabel(icon)
+            icon_label.setStyleSheet("font-size: 12px; font-weight: bold; color: #3B82F6;")
 
         title_label = QLabel(title)
         title_label.setObjectName("kpi_title")
 
-        header_layout.addWidget(icon_label)
+        if icon_label is not None:
+            header_layout.addWidget(icon_label)
         header_layout.addWidget(title_label)
         header_layout.addStretch()
 
         # Value
         value_label = QLabel(value)
         value_label.setObjectName("kpi_value")
+        # Right-align numeric KPI values for better readability
+        value_label.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
 
         # Optionally expose the label on the view for controller updates
         if attr_name:
@@ -141,6 +154,7 @@ class DashboardView(QWidget):  # MATPLOTLIB VERSION ONLY
         if comparison_attr:
             comparison_label = QLabel("")
             comparison_label.setStyleSheet("font-size: 12px; font-weight: bold;")
+            comparison_label.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
             setattr(self, comparison_attr, comparison_label)
             card_layout.addWidget(comparison_label)
 
@@ -226,7 +240,15 @@ class DashboardView(QWidget):  # MATPLOTLIB VERSION ONLY
             ax.spines['top'].set_visible(False)
             ax.spines['right'].set_visible(False)
             
-            self.fig_sales.tight_layout()
+            # Apply padding and reasonable subplot margins so labels don't get clipped
+            try:
+                self.fig_sales.tight_layout(pad=1.6)
+                self.fig_sales.subplots_adjust(left=0.12, right=0.98, top=0.88, bottom=0.12)
+            except Exception:
+                try:
+                    self.fig_sales.tight_layout()
+                except Exception:
+                    pass
             self.canvas_sales.draw()
 
         except Exception as e:
@@ -267,7 +289,15 @@ class DashboardView(QWidget):  # MATPLOTLIB VERSION ONLY
             ax.spines['right'].set_visible(False)
             ax.tick_params(axis='x', labelsize=9)
             
-            self.fig_items.tight_layout(pad=0.5)
+            # Add slightly larger padding and adjust subplot margins for horizontal bars
+            try:
+                self.fig_items.tight_layout(pad=1.6)
+                self.fig_items.subplots_adjust(left=0.12, right=0.98, top=0.88, bottom=0.12)
+            except Exception:
+                try:
+                    self.fig_items.tight_layout()
+                except Exception:
+                    pass
             self.canvas_items.draw()
 
         except Exception as e:

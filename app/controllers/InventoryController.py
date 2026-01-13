@@ -1,91 +1,197 @@
 from PyQt6.QtWidgets import QMessageBox
 from datetime import datetime
+import re
 
 class InventoryController:
     def __init__(self, model, view, current_user=None):
         self.model = model
         self.view = view
-        self.current_user = current_user  # Current logged-in user
+        self.current_user = current_user  
 
-        # Inventory tab signals
+        
         self.view.add_btn.clicked.connect(self.add_item)
         self.view.update_btn.clicked.connect(self.update_item)
         self.view.refresh_btn.clicked.connect(self.refresh_inventory)
         self.view.search_btn.clicked.connect(self.search_inventory)
         self.view.search_box.returnPressed.connect(self.search_inventory)
 
-        # Stock In signals
+       
         self.view.stock_in_btn.clicked.connect(self.record_stock_in)
         self.view.stock_in_clear_btn.clicked.connect(self.clear_stock_in_form)
 
-        # Stock Out signals
+        
         self.view.stock_out_btn.clicked.connect(self.record_stock_out)
         self.view.stock_out_clear_btn.clicked.connect(self.clear_stock_out_form)
 
-        # Stock Log signals
+       
         self.view.stock_log_refresh_btn.clicked.connect(self.refresh_stock_log)
         self.view.stock_log_item_filter.currentIndexChanged.connect(self.refresh_stock_log)
 
-        print("[INVENTORY CONTROLLER] InventoryController initialized")
         
-        # Load initial data
+        
+       
+        try:
+            if hasattr(self.view, 'set_suppliers') and hasattr(self.view, 'supplier_model') and self.view.supplier_model:
+                suppliers = self.view.supplier_model.fetch_all()
+                self.view.set_suppliers(suppliers)
+        except Exception:
+            pass
+
         self.refresh_inventory()
         self.refresh_stock_log()
 
     def refresh_inventory(self):
-        """Refresh inventory table."""
-        print("[INVENTORY CONTROLLER] refresh_inventory() called")
+       
         try:
             items = self.model.fetch_all()
             self.view.load_table(items)
-            print(f"[INVENTORY CONTROLLER] Loaded {len(items)} items")
         except Exception as e:
-            print(f"[INVENTORY CONTROLLER ERROR] refresh_inventory: {e}")
             QMessageBox.critical(self.view, "Error", f"Failed to load inventory: {str(e)}")
 
     def add_item(self):
-        """Add a new inventory item."""
-        print("[INVENTORY CONTROLLER] add_item() called")
         try:
-            data = self.view.get_form_data()
-            if not data:
+            raw = self.view.collect_form_data()
+            if not raw:
+                QMessageBox.warning(self.view, "Validation", "Invalid form data")
                 return
-            
-            # Validate data
-            if not data[0]:  # part_name
+
+            part_name = raw[0]
+            category = raw[1]
+            brand = raw[2]
+            model_number = raw[3]
+            quantity_text = raw[4]
+            cost_text = raw[5]
+            selling_text = raw[6]
+            supplier_id = raw[7]
+
+            if not part_name:
                 QMessageBox.warning(self.view, "Validation", "Part name is required.")
                 return
-            
-            if data[4] < 0:  # quantity
+
+            if supplier_id is None:
+                QMessageBox.warning(self.view, "Validation", "Please select a supplier.")
+                return
+
+            quantity_clean = re.sub(r"[^\d-]", "", quantity_text or "")
+            if not quantity_clean:
+                QMessageBox.warning(self.view, "Validation", "Quantity is required.")
+                return
+            try:
+                quantity = int(quantity_clean)
+            except Exception:
+                QMessageBox.warning(self.view, "Validation", "Invalid quantity.")
+                return
+            if quantity < 0:
                 QMessageBox.warning(self.view, "Validation", "Quantity cannot be negative.")
                 return
-                
-            if data[5] < 0 or data[6] < 0:  # prices
+
+            cost_clean = re.sub(r"[^\d.\-]", "", cost_text or "")
+            selling_clean = re.sub(r"[^\d.\-]", "", selling_text or "")
+            if not cost_clean or not selling_clean:
+                QMessageBox.warning(self.view, "Validation", "Cost and selling prices are required.")
+                return
+            try:
+                cost_price = float(cost_clean)
+                selling_price = float(selling_clean)
+            except Exception:
+                QMessageBox.warning(self.view, "Validation", "Invalid price values.")
+                return
+            if cost_price < 0 or selling_price < 0:
                 QMessageBox.warning(self.view, "Validation", "Prices cannot be negative.")
                 return
-            
+            if selling_price < cost_price:
+                QMessageBox.warning(self.view, "Validation", "Selling price cannot be below cost price.")
+                return
+
+            data = (
+                part_name,
+                category,
+                brand,
+                model_number,
+                quantity,
+                cost_price,
+                selling_price,
+                supplier_id,
+            )
+
             self.model.create_item(data)
             self.view.clear_form()
             self.refresh_inventory()
             QMessageBox.information(self.view, "Success", "Item added successfully")
         except Exception as e:
-            print(f"[INVENTORY CONTROLLER ERROR] add_item: {e}")
             QMessageBox.critical(self.view, "Error", f"Failed to add item: {str(e)}")
 
     def update_item(self):
         """Update selected inventory item."""
-        print("[INVENTORY CONTROLLER] update_item() called")
         try:
-            data = self.view.get_form_data(with_id=True)
-            if not data:
+            raw = self.view.collect_form_data(with_id=True)
+            if not raw:
+                QMessageBox.warning(self.view, "Validation", "Invalid form data")
                 return
-            
-            self.model.update_item(data[0], data[1:])
+            item_id = raw[0]
+            part_name = raw[1]
+            category = raw[2]
+            brand = raw[3]
+            model_number = raw[4]
+            quantity_text = raw[5]
+            cost_text = raw[6]
+            selling_text = raw[7]
+            supplier_id = raw[8]
+
+            if not part_name:
+                QMessageBox.warning(self.view, "Validation", "Part name is required.")
+                return
+            if supplier_id is None:
+                QMessageBox.warning(self.view, "Validation", "Please select a supplier.")
+                return
+
+            quantity_clean = re.sub(r"[^\d-]", "", quantity_text or "")
+            if not quantity_clean:
+                QMessageBox.warning(self.view, "Validation", "Quantity is required.")
+                return
+            try:
+                quantity = int(quantity_clean)
+            except Exception:
+                QMessageBox.warning(self.view, "Validation", "Invalid quantity.")
+                return
+            if quantity < 0:
+                QMessageBox.warning(self.view, "Validation", "Quantity cannot be negative.")
+                return
+
+            cost_clean = re.sub(r"[^\d.\-]", "", cost_text or "")
+            selling_clean = re.sub(r"[^\d.\-]", "", selling_text or "")
+            if not cost_clean or not selling_clean:
+                QMessageBox.warning(self.view, "Validation", "Cost and selling prices are required.")
+                return
+            try:
+                cost_price = float(cost_clean)
+                selling_price = float(selling_clean)
+            except Exception:
+                QMessageBox.warning(self.view, "Validation", "Invalid price values.")
+                return
+            if cost_price < 0 or selling_price < 0:
+                QMessageBox.warning(self.view, "Validation", "Prices cannot be negative.")
+                return
+            if selling_price < cost_price:
+                QMessageBox.warning(self.view, "Validation", "Selling price cannot be below cost price.")
+                return
+
+            data = (
+                part_name,
+                category,
+                brand,
+                model_number,
+                quantity,
+                cost_price,
+                selling_price,
+                supplier_id,
+            )
+
+            self.model.update_item(item_id, data)
             self.view.clear_form()
             self.refresh_inventory()
             QMessageBox.information(self.view, "Success", "Item updated successfully")
         except Exception as e:
-            print(f"[INVENTORY CONTROLLER ERROR] update_item: {e}")
             QMessageBox.critical(self.view, "Error", f"Failed to update item: {str(e)}")
 
     def search_inventory(self):

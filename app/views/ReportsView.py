@@ -5,6 +5,19 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtCore import QDate, Qt
 from datetime import datetime, timedelta
 import csv
+from reportlab.lib.pagesizes import letter, landscape
+from reportlab.platypus import (
+    SimpleDocTemplate,
+    Table as RLTable,
+    TableStyle,
+    Paragraph,
+    Spacer,
+    Image as RLImage,
+    PageBreak,
+)
+from reportlab.lib import colors
+from reportlab.lib.styles import getSampleStyleSheet
+from reportlab.lib.units import inch
 try:
     import openpyxl
     from openpyxl.utils import get_column_letter
@@ -46,6 +59,8 @@ class ReportsView(QWidget):
         
         layout.addWidget(self.tab_widget)
         self.setLayout(layout)
+        # wire export button signals
+        self.connect_export_buttons()
 
     def create_sales_tab(self):
         """Create sales report tab."""
@@ -73,6 +88,9 @@ class ReportsView(QWidget):
         self.sales_export_btn = QPushButton("Export to CSV")
         self.sales_export_btn.setObjectName("secondary_button")
         date_layout.addWidget(self.sales_export_btn)
+        self.sales_export_pdf_btn = QPushButton("Export to PDF")
+        self.sales_export_pdf_btn.setObjectName("secondary_button")
+        date_layout.addWidget(self.sales_export_pdf_btn)
         
         date_layout.addStretch()
         layout.addLayout(date_layout)
@@ -117,6 +135,9 @@ class ReportsView(QWidget):
         self.top_items_refresh_btn = QPushButton("Refresh")
         self.top_items_refresh_btn.setObjectName("search_button")
         control_layout.addWidget(self.top_items_refresh_btn)
+        self.top_items_export_btn = QPushButton("Export to PDF")
+        self.top_items_export_btn.setObjectName("secondary_button")
+        control_layout.addWidget(self.top_items_export_btn)
         control_layout.addStretch()
         layout.addLayout(control_layout)
         
@@ -142,6 +163,9 @@ class ReportsView(QWidget):
         self.inventory_refresh_btn = QPushButton("Refresh")
         self.inventory_refresh_btn.setObjectName("search_button")
         control_layout.addWidget(self.inventory_refresh_btn)
+        self.inventory_export_btn = QPushButton("Export to PDF")
+        self.inventory_export_btn.setObjectName("secondary_button")
+        control_layout.addWidget(self.inventory_export_btn)
         control_layout.addStretch()
         layout.addLayout(control_layout)
         
@@ -315,6 +339,182 @@ class ReportsView(QWidget):
             self.category_table.setItem(row, 2, QTableWidgetItem(str(item[2])))
             self.category_table.setItem(row, 3, QTableWidgetItem(f"Php {item[3]:,.2f}" if item[3] else "Php 0.00"))
             self.category_table.setItem(row, 4, QTableWidgetItem(f"Php {item[4]:,.2f}" if item[4] else "Php 0.00"))
+
+    def _export_table_widget_to_pdf(self, table_widget, filename, title=None):
+        try:
+            styles = getSampleStyleSheet()
+
+            # Prepare document
+            doc = SimpleDocTemplate(
+                filename,
+                pagesize=landscape(letter),
+                rightMargin=36,
+                leftMargin=36,
+                topMargin=72,
+                bottomMargin=36,
+            )
+
+            elements = []
+
+            # Optional title block
+            if title:
+                elements.append(Paragraph(title, styles['Heading2']))
+                elements.append(Spacer(1, 6))
+
+            # Build data rows
+            headers = [
+                table_widget.horizontalHeaderItem(c).text()
+                if table_widget.horizontalHeaderItem(c)
+                else ""
+                for c in range(table_widget.columnCount())
+            ]
+
+            data = [headers]
+
+            # Track max text width per column (approx chars)
+            col_max_chars = [len(h) for h in headers]
+
+            for r in range(table_widget.rowCount()):
+                row = []
+                for c in range(table_widget.columnCount()):
+                    item = table_widget.item(r, c)
+                    text = item.text() if item else ""
+                    row.append(text)
+                    if len(text) > col_max_chars[c]:
+                        col_max_chars[c] = len(text)
+                data.append(row)
+
+            # Estimate column widths based on character counts and available page width
+            page_width = landscape(letter)[0] - doc.leftMargin - doc.rightMargin
+            # assign relative weights clipped
+            total_chars = sum(max(1, v) for v in col_max_chars)
+            col_widths = [max(50, (v / total_chars) * page_width) for v in col_max_chars]
+
+            # Create table with repeatRows for header and allow splitting across pages
+            rl_table = RLTable(data, colWidths=col_widths, repeatRows=1)
+
+            # Table styling: header row, alternate backgrounds, padding, alignment
+            tbl_style = TableStyle([
+                ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#f5f7fa')),
+                ('TEXTCOLOR', (0, 0), (-1, 0), colors.HexColor('#0b2e4a')),
+                ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+                ('GRID', (0, 0), (-1, -1), 0.25, colors.HexColor('#c8d0d8')),
+                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                ('FONTSIZE', (0, 0), (-1, -1), 9),
+                ('BOTTOMPADDING', (0, 0), (-1, 0), 8),
+                ('TOPPADDING', (0, 0), (-1, 0), 8),
+            ])
+
+            # Alternate row background
+            for i in range(1, len(data)):
+                if i % 2 == 0:
+                    tbl_style.add('BACKGROUND', (0, i), (-1, i), colors.HexColor('#fcfdff'))
+
+            # Right-align numeric-looking columns (heuristic)
+            for col_idx in range(len(headers)):
+                # check a few rows to decide if numeric
+                numeric_count = 0
+                for r in range(1, min(10, len(data))):
+                    try:
+                        float(str(data[r][col_idx]).replace('Php', '').replace(',', '').strip())
+                        numeric_count += 1
+                    except Exception:
+                        pass
+                if numeric_count >= max(1, (len(data) - 1) // 2):
+                    tbl_style.add('ALIGN', (col_idx, 1), (col_idx, -1), 'RIGHT')
+
+            rl_table.setStyle(tbl_style)
+
+            elements.append(rl_table)
+
+            # Header/footer drawing functions
+            logo_path = None
+            try:
+                # try to use embedded logo if available
+                import os
+                logo_candidate = os.path.join(os.path.dirname(__file__), '..', 'assets', 'images', 'techbayanlogo.jpg')
+                logo_candidate = os.path.normpath(logo_candidate)
+                if os.path.exists(logo_candidate):
+                    logo_path = logo_candidate
+            except Exception:
+                logo_path = None
+
+            def _header(canvas, doc_obj):
+                canvas.saveState()
+                width, height = doc_obj.pagesize
+                # Draw logo at left
+                if logo_path:
+                    try:
+                        img_w = 1.0 * inch
+                        img_h = 0.35 * inch
+                        canvas.drawImage(logo_path, doc_obj.leftMargin, height - 50, width=img_w, height=img_h, preserveAspectRatio=True, mask='auto')
+                    except Exception:
+                        pass
+                # Title centered
+                canvas.setFont('Helvetica-Bold', 12)
+                canvas.drawCentredString(width / 2.0, height - 36, title if title else '')
+                # Date at right
+                canvas.setFont('Helvetica', 8)
+                canvas.drawRightString(width - doc_obj.rightMargin, height - 34, datetime.now().strftime('%Y-%m-%d %H:%M'))
+                canvas.restoreState()
+
+            def _footer(canvas, doc_obj):
+                canvas.saveState()
+                width, height = doc_obj.pagesize
+                canvas.setFont('Helvetica', 8)
+                footer_text = f"Generated by POS System"
+                canvas.drawString(doc_obj.leftMargin, doc_obj.bottomMargin - 18, footer_text)
+                # page number
+                page_num = canvas.getPageNumber()
+                canvas.drawRightString(width - doc_obj.rightMargin, doc_obj.bottomMargin - 18, f"Page {page_num}")
+                canvas.restoreState()
+
+            # Build document with header/footer callbacks
+            doc.build(elements, onFirstPage=lambda c, d: (_header(c, d), _footer(c, d)), onLaterPages=lambda c, d: (_header(c, d), _footer(c, d)))
+            QMessageBox.information(self, "Success", f"Exported PDF to {filename}")
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Failed to export PDF: {str(e)}")
+
+    def connect_export_buttons(self):
+        # Connect export buttons to the handlers (call after controller sets up view)
+        try:
+            self.sales_export_pdf_btn.clicked.connect(self._handle_export_sales_pdf)
+        except Exception:
+            pass
+        try:
+            self.top_items_export_btn.clicked.connect(self._handle_export_top_items_pdf)
+        except Exception:
+            pass
+        try:
+            self.inventory_export_btn.clicked.connect(self._handle_export_inventory_pdf)
+        except Exception:
+            pass
+
+    def _choose_save_file(self, suggested_name):
+        path, _ = QFileDialog.getSaveFileName(self, "Save PDF", suggested_name, "PDF Files (*.pdf)")
+        return path
+
+    def _handle_export_sales_pdf(self):
+        filename = self._choose_save_file("sales_report.pdf")
+        if not filename:
+            return
+        # Merge both tables into a single PDF by exporting the detailed transactions table
+        title = "Sales Detailed Transactions"
+        self._export_table_widget_to_pdf(self.sales_detail_table, filename, title=title)
+
+    def _handle_export_top_items_pdf(self):
+        filename = self._choose_save_file("top_items_report.pdf")
+        if not filename:
+            return
+        title = "Top Selling Items"
+        self._export_table_widget_to_pdf(self.top_items_table, filename, title=title)
+
+    def _handle_export_inventory_pdf(self):
+        filename = self._choose_save_file("inventory_report.pdf")
+        if not filename:
+            return
+        title = "Inventory Status"
+        self._export_table_widget_to_pdf(self.inventory_table, filename, title=title)
 
     def export_to_csv(self, data, filename):
         """Export data to CSV file."""

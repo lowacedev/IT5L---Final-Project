@@ -17,110 +17,105 @@ class ReceiptGenerator:
         if sale_date is None:
             sale_date = datetime.now()
         
-        # Format the receipt as HTML
+        # Format the receipt as HTML with store header and contact info
+        store_name = "TechBayan"
+        store_address = "Matina, Davao City"
+        store_contact = "Tel: (02) 1234-5678"
+
         html = f"""
         <html>
         <head>
             <style>
-                body {{ font-family: 'Courier New', monospace; width: 300px; margin: 20px auto; }}
-                .receipt {{ border: 1px solid black; padding: 20px; }}
-                .header {{ text-align: center; font-weight: bold; margin-bottom: 20px; }}
-                .store-name {{ font-size: 16px; margin-bottom: 5px; }}
-                .receipt-number {{ font-size: 12px; color: #666; margin-bottom: 10px; }}
-                .divider {{ border-top: 1px dashed black; margin: 10px 0; }}
-                .items {{ margin: 15px 0; }}
-                .item-row {{ display: flex; justify-content: space-between; margin: 5px 0; font-size: 11px; }}
-                .item-name {{ flex: 1; }}
-                .item-qty {{ width: 30px; text-align: center; }}
-                .item-price {{ width: 50px; text-align: right; }}
-                .totals {{ margin: 15px 0; }}
-                .total-row {{ display: flex; justify-content: space-between; margin: 5px 0; font-size: 12px; }}
-                .grand-total {{ font-weight: bold; font-size: 14px; margin-top: 10px; }}
-                .payment {{ margin: 15px 0; font-size: 11px; }}
-                .payment-row {{ display: flex; justify-content: space-between; margin: 3px 0; }}
-                .footer {{ text-align: center; margin-top: 20px; font-size: 10px; color: #666; }}
-                .success {{ color: green; font-weight: bold; text-align: center; margin-top: 10px; }}
+                body {{ font-family: 'Helvetica', Arial, sans-serif; width: 300px; margin: 8px auto; color: #222; }}
+                .receipt {{ padding: 12px; background: #fff; border-radius: 4px; }}
+                .header {{ text-align: center; margin-bottom: 6px; }}
+                .store-name {{ font-size: 16px; font-weight: 700; margin-bottom: 2px; }}
+                .store-meta {{ font-size: 10px; color: #666; margin-bottom: 6px; }}
+                .divider {{ border-top: 1px solid #e6e6e6; margin: 8px 0; }}
+                .items {{ margin: 6px 0; font-size: 11px; }}
+                .item-row {{ display: grid; grid-template-columns: 1fr auto; gap: 6px; align-items: start; margin: 4px 0; }}
+                .item-name {{ font-weight: 500; }}
+                .item-sub {{ font-size: 10px; color: #444; }}
+                .item-total {{ text-align: right; font-weight: 600; min-width: 80px; }}
+                .totals {{ margin: 8px 0; font-size: 12px; }}
+                .total-row {{ display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: center; margin: 4px 0; }}
+                .grand-total {{ font-weight: 700; font-size: 14px; margin-top: 6px; display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: center; }}
+                .payment {{ margin: 8px 0; font-size: 11px; display: grid; grid-template-columns: 1fr auto; gap: 4px; }}
+                .footer {{ text-align: center; margin-top: 10px; font-size: 10px; color: #666; }}
+                .success {{ color: #0b7a4d; font-weight: bold; text-align: center; margin-top: 8px; }}
             </style>
         </head>
         <body>
             <div class="receipt">
                 <div class="header">
-                    <div class="store-name">COMPUTER PARTS POS</div>
-                    <div class="receipt-number">Receipt #{sale_id}</div>
-                    <div style="font-size: 10px;">{sale_date.strftime('%Y-%m-%d %H:%M:%S')}</div>
+                    <div class="store-name">{store_name}</div>
+                    <div class="store-meta">{store_address} • {store_contact}</div>
+                    <div class="store-meta">Receipt #{sale_id} • {sale_date.strftime('%Y-%m-%d %H:%M:%S')}</div>
                 </div>
-                
                 <div class="divider"></div>
-                
                 <div class="items">
-                    <div style="font-weight: bold; font-size: 11px; display: flex; justify-content: space-between; margin-bottom: 5px;">
+                    <div style="font-weight:700; font-size:11px; display:grid; grid-template-columns:1fr auto; gap:6px; margin-bottom:6px;">
                         <span>Item</span>
-                        <span style="width: 100px; text-align: right;">Qty × Price</span>
+                        <span style="text-align:right;">Total</span>
                     </div>
 """
         
         for item in items:
+            line_total = item['qty'] * item['price']
             html += f"""
                     <div class="item-row">
-                        <span class="item-name">{item['name']}</span>
-                        <span style="width: 100px; text-align: right;">{item['qty']}×Php {item['price']:,.2f}</span>
-                    </div>
-                    <div class="item-row" style="text-align: right; font-weight: bold;">
-                        Php {item['qty'] * item['price']:,.2f}
+                        <div>
+                            <div class="item-name">{item['name']}</div>
+                            <div class="item-sub">{item['qty']} × Php {item['price']:,.2f}</div>
+                        </div>
+                        <div class="item-total">Php {line_total:,.2f}</div>
                     </div>
 """
         
         html += f"""
                 </div>
-                
                 <div class="divider"></div>
-                
                 <div class="totals">
                     <div class="total-row">
-                        <span>Subtotal:</span>
-                        <span>Php {subtotal:,.2f}</span>
+                        <div>Subtotal:</div>
+                        <div style="text-align:right;">Php {subtotal:,.2f}</div>
                     </div>
                     <div class="total-row">
-                        <span>VAT (12%):</span>
-                        <span>Php {vat_amount:,.2f}</span>
+                        <div>VAT (12%):</div>
+                        <div style="text-align:right;">Php {vat_amount:,.2f}</div>
                     </div>
-                    <div class="total-row grand-total">
-                        <span>TOTAL:</span>
-                        <span>Php {total:,.2f}</span>
+                    <div class="grand-total">
+                        <div style="font-weight:700;">TOTAL:</div>
+                        <div style="text-align:right; font-weight:700;">Php {total:,.2f}</div>
                     </div>
                 </div>
-                
                 <div class="divider"></div>
-                
                 <div class="payment">
-                    <div class="payment-row">
-                        <span>Payment Mode:</span>
-                        <span style="font-weight: bold;">{payment_mode}</span>
+                    <div style="display:flex; justify-content:space-between;">
+                        <div><strong>Payment Mode:</strong></div>
+                        <div style="text-align:right;">{payment_mode}</div>
                     </div>
-                    <div class="payment-row">
-                        <span>Amount Received:</span>
-                        <span>Php {amount_received:,.2f}</span>
+                    <div style="display:flex; justify-content:space-between;">
+                        <div>Amount Received:</div>
+                        <div style="text-align:right;">Php {amount_received:,.2f}</div>
                     </div>
-                    <div class="payment-row" style="font-weight: bold;">
-                        <span>Change:</span>
-                        <span>Php {change:,.2f}</span>
+                    <div style="display:flex; justify-content:space-between; font-weight:700; margin-top:6px;">
+                        <div>Change:</div>
+                        <div style="text-align:right;">Php {change:,.2f}</div>
                     </div>
                 </div>
-                
                 <div class="divider"></div>
-                
                 <div class="footer">
 """
         
         if cashier_name:
-            html += f"<div>Cashier: {cashier_name}</div>"
-        
+            html += f"<div style=\"font-size:11px; margin-bottom:4px;\">Cashier: {cashier_name}</div>"
+
         html += f"""
                     <div>Thank you for your purchase!</div>
-                    <div>{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</div>
+                    <div style=\"font-size:10px; color:#888; margin-top:6px;\">{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</div>
                 </div>
-                
-                <div class="success">✓ TRANSACTION COMPLETE</div>
+                <div class=\"success\">✓ TRANSACTION COMPLETE</div>
             </div>
         </body>
         </html>
@@ -171,10 +166,14 @@ class ReceiptGenerator:
                 alignment=1
             )
             
-            # Header
-            story.append(Paragraph("COMPUTER PARTS POS", center_style))
-            story.append(Paragraph(f"Receipt #{sale_id}", small_style))
-            story.append(Paragraph(sale_date.strftime('%Y-%m-%d %H:%M:%S'), small_style))
+            # Header (store name and meta)
+            store_name = "TechBayan"
+            store_address = "Matina, Davao City"
+            store_contact = "Tel: (02) 1234-5678"
+
+            story.append(Paragraph(store_name, center_style))
+            story.append(Paragraph(store_address + ' • ' + store_contact, small_style))
+            story.append(Paragraph(f"Receipt #{sale_id} • {sale_date.strftime('%Y-%m-%d %H:%M:%S')}", small_style))
             story.append(Spacer(1, 0.1*inch))
             
             # Items table
@@ -237,7 +236,7 @@ class ReceiptGenerator:
             if cashier_name:
                 story.append(Paragraph(f"Cashier: {cashier_name}", small_style))
             story.append(Paragraph("Thank you for your purchase!", small_style))
-            story.append(Paragraph("✓ TRANSACTION COMPLETE", center_style))
+            story.append(Paragraph(" TRANSACTION COMPLETE", center_style))
             
             # Build PDF
             doc.build(story)

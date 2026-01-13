@@ -263,7 +263,8 @@ class MainWindow(QMainWindow):
         role = self.user.get('role', 'admin')
         # Define allowed pages per role (only admin and cashier)
         perms = {
-            'admin': ['dashboard', 'pos', 'inventory', 'reports', 'suppliers', 'staff'],
+            # Admin will not see the POS on admin side
+            'admin': ['dashboard', 'inventory', 'reports', 'suppliers', 'staff'],
             # Cashier should only have access to Point of Sale
             'cashier': ['pos']
         }
@@ -281,7 +282,7 @@ class MainWindow(QMainWindow):
     def _can_access(self, page_key: str) -> bool:
         role = self.user.get('role', 'cashier')
         perms = {
-            'admin': ['dashboard', 'pos', 'inventory', 'reports', 'suppliers', 'staff'],
+            'admin': ['dashboard', 'inventory', 'reports', 'suppliers', 'staff'],
             'cashier': ['pos']
         }
         allowed = perms.get(role, ['pos'])

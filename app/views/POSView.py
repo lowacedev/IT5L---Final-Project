@@ -3,6 +3,7 @@ from PyQt6.QtWidgets import (
     QLineEdit, QLabel, QTableWidgetItem, QHeaderView, QFrame, QMessageBox
 )
 from PyQt6.QtCore import Qt
+import re
 
 class POSView(QWidget):
     def __init__(self):
@@ -150,7 +151,16 @@ class POSView(QWidget):
         self.results_table.setRowCount(len(results))
         for r, item in enumerate(results):
             for c, value in enumerate(item):
-                cell = QTableWidgetItem(str(value))
+                # Format price column with commas and currency
+                if c == 2:
+                    try:
+                        price = float(value)
+                        text = f"{price:,.2f}"
+                    except Exception:
+                        text = str(value)
+                    cell = QTableWidgetItem(text)
+                else:
+                    cell = QTableWidgetItem(str(value))
                 cell.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
                 self.results_table.setItem(r, c, cell)
 
@@ -170,11 +180,11 @@ class POSView(QWidget):
         qty_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
         self.cart_table.setItem(row, 1, qty_item)
 
-        price_item = QTableWidgetItem(f"Php {price:.2f}")
+        price_item = QTableWidgetItem(f"{price:,.2f}")
         price_item.setTextAlignment(Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignRight)
         self.cart_table.setItem(row, 2, price_item)
 
-        total_item = QTableWidgetItem(f"Php {total:.2f}")
+        total_item = QTableWidgetItem(f"{total:,.2f}")
         total_item.setTextAlignment(Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignRight)
         self.cart_table.setItem(row, 3, total_item)
 
@@ -183,7 +193,7 @@ class POSView(QWidget):
         total = qty * price
         # Columns: 0=Name, 1=Qty, 2=Price, 3=Total
         self.cart_table.setItem(row, 1, QTableWidgetItem(str(qty)))
-        self.cart_table.setItem(row, 3, QTableWidgetItem(f"Php {total:.2f}"))
+        self.cart_table.setItem(row, 3, QTableWidgetItem(f"{total:,.2f}"))
 
         for col in [1, 3]:
             item = self.cart_table.item(row, col)

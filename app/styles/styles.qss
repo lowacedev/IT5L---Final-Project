@@ -214,15 +214,16 @@ QPushButton:disabled {
 }
 
 /* Logout - Dark */
+/* Logout - Light Red */
 #logout_button {
-    background-color: #212529;
-    color: #FFFFFF;
-    border: 1px solid #212529;
+    background-color: #FCA5A5; /* light red */
+    color: #111827;
+    border: 1px solid #F87171;
 }
 
 #logout_button:hover {
-    background-color: #1a1d20;
-    border-color: #17191c;
+    background-color: #F87171;
+    border-color: #EF4444;
 }
 
 /* Checkout - use primary blue */

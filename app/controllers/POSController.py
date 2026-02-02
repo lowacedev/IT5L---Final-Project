@@ -1,14 +1,13 @@
-from PyQt6.QtWidgets import QMessageBox
-import re
+from app.exceptions import ValidationError, NotFoundError, DatabaseError
+
 
 class POSController:
-    def __init__(self, model, view, user=None):
-        self.model = model
+    def __init__(self, service, view, user=None):
+        self.service = service
         self.view = view
         self.cart = []
         self.user = user or {}
 
-        # Connect signals
         view.search_btn.clicked.connect(self.search)
         view.results_table.cellDoubleClicked.connect(self.add_item)
         view.checkout_btn.clicked.connect(self.checkout)
@@ -16,78 +15,66 @@ class POSController:
         view.update_qty_btn.clicked.connect(self.update_quantity)
         view.remove_item_btn.clicked.connect(self.remove_item)
         
-        print("[POS CONTROLLER] POSController initialized")
-        print(f"[POS CONTROLLER] search_btn connected: {view.search_btn.receivers(view.search_btn.clicked)}")
-        print(f"[POS CONTROLLER] checkout_btn connected: {view.checkout_btn.receivers(view.checkout_btn.clicked)}")
-        try:
-            print(f"[POS CONTROLLER] current user: {self.user.get('username')} (id: {self.user.get('id')})")
-        except Exception:
-            pass
-        
-        # Load all inventory items on startup
         self.load_all_items()
 
     def load_all_items(self):
-        """Load all inventory items on startup."""
-        print("[POS CONTROLLER] Loading all inventory items...")
         try:
-            results = self.model.fetch_all()
-            self.view.add_result(results)
-            if results:
-                print(f"[POS CONTROLLER] Loaded {len(results)} items into results table")
-            else:
-                print("[POS CONTROLLER] No items found in inventory")
+            results = self.service.fetch_all()
+            items_data = [
+                (item.id, item.part_name, item.selling_price, item.quantity)
+                for item in results
+            ]
+            self.view.add_result(items_data)
+        except (ValidationError, NotFoundError, DatabaseError) as e:
+            self.view.show_error(f"Failed to load inventory: {str(e)}")
         except Exception as e:
-            print(f"[POS CONTROLLER ERROR] load_all_items: {e}")
-            QMessageBox.warning(self.view, "Error", f"Failed to load inventory: {str(e)}")
+            self.view.show_error(f"Unexpected error: {str(e)}")
 
     def search(self):
-        """Search for items based on keyword."""
-        print("[POS CONTROLLER] search() called")
         keyword = self.view.search_box.text().strip()
         if not keyword:
-            QMessageBox.warning(self.view, "Search", "Please enter a search term.")
+            self.view.show_warning("Please enter a search term.")
             return
         
-        results = self.model.search_item(keyword)
-        self.view.add_result(results)
-        
-        if not results:
-            QMessageBox.information(self.view, "Search", "No items found.")
+        try:
+            results = self.service.search_item(keyword)
+            items_data = [
+                (item.id, item.part_name, item.selling_price, item.quantity)
+                for item in results
+            ]
+            self.view.add_result(items_data)
+            if not results:
+                self.view.show_info("No items found.")
+        except (ValidationError, NotFoundError, DatabaseError) as e:
+            self.view.show_error(f"Search failed: {str(e)}")
+        except Exception as e:
+            self.view.show_error(f"Unexpected error: {str(e)}")
 
     def add_item(self, row, col):
-        """Add item from search results to cart."""
-        print(f"[POS CONTROLLER] add_item() called - row: {row}, col: {col}")
         try:
             item_id = int(self.view.results_table.item(row, 0).text())
             name = self.view.results_table.item(row, 1).text()
-            # Parse price and stock safely (strip currency symbols and commas)
             price_text = self.view.results_table.item(row, 2).text()
             stock_text = self.view.results_table.item(row, 3).text()
-            price = float(re.sub(r"[^\d.\-]", "", price_text)) if price_text else 0.0
-            stock = int(re.sub(r"[^\d-]", "", stock_text)) if stock_text else 0
             
-            print(f"[POS CONTROLLER] Adding {name} (ID: {item_id}, Price: Php {price}, Stock: {stock})")
+            price = float(price_text.replace(",", "")) if price_text else 0.0
+            stock = int(stock_text.replace(",", "")) if stock_text else 0
             
             if stock <= 0:
-                QMessageBox.warning(self.view, "Out of Stock", "This item is out of stock.")
+                self.view.show_warning("This item is out of stock.")
                 return
 
-            # Check if item already in cart
             for i, cart_item in enumerate(self.cart):
                 if cart_item["id"] == item_id:
-                    # Update quantity
                     new_qty = cart_item["qty"] + 1
                     if new_qty > stock:
-                        QMessageBox.warning(self.view, "Stock Limit", 
-                                          f"Cannot add more. Only {stock} in stock.")
+                        self.view.show_warning(f"Cannot add more. Only {stock} in stock.")
                         return
                     cart_item["qty"] = new_qty
                     self.view.update_cart_row(i, new_qty, price)
                     self.update_total()
                     return
 
-          
             self.cart.append({
                 "id": item_id,
                 "name": name,
@@ -100,32 +87,27 @@ class POSController:
             self.update_total()
             
         except Exception as e:
-            error_msg = str(e).encode('utf-8', errors='replace').decode('utf-8')
-            print(f"[POS CONTROLLER ERROR] add_item: {error_msg}")
-            QMessageBox.critical(self.view, "Error", f"Failed to add item: {error_msg}")
+            self.view.show_error(f"Failed to add item: {str(e)}")
 
     def update_quantity(self):
-        """Update quantity for selected cart item."""
         row = self.view.cart_table.currentRow()
         if row < 0:
-            QMessageBox.warning(self.view, "No Selection", "Please select an item from cart.")
+            self.view.show_warning("Please select an item from cart.")
             return
         try:
             new_qty_text = self.view.qty_input.text()
             new_qty = int(new_qty_text)
             if new_qty <= 0:
-                QMessageBox.warning(self.view, "Invalid Quantity", "Quantity must be greater than 0.")
+                self.view.show_warning("Quantity must be greater than 0.")
                 return
 
-            # Ensure cart index exists
             if row >= len(self.cart):
-                QMessageBox.warning(self.view, "Selection Error", "Selected cart item not found.")
+                self.view.show_warning("Selected cart item not found.")
                 return
 
             cart_item = self.cart[row]
             if new_qty > cart_item["stock"]:
-                QMessageBox.warning(self.view, "Stock Limit",
-                                    f"Cannot set quantity to {new_qty}. Only {cart_item['stock']} in stock.")
+                self.view.show_warning(f"Cannot set quantity to {new_qty}. Only {cart_item['stock']} in stock.")
                 return
 
             cart_item["qty"] = new_qty
@@ -134,17 +116,14 @@ class POSController:
             self.view.qty_input.clear()
 
         except ValueError:
-            QMessageBox.warning(self.view, "Invalid Input", "Please enter a valid number.")
+            self.view.show_warning("Please enter a valid number.")
         except Exception as e:
-            # Catch-all to prevent the app from crashing on unexpected errors
-            print(f"[POS CONTROLLER ERROR] update_quantity: {e}")
-            QMessageBox.critical(self.view, "Error", f"Failed to update quantity: {str(e)}")
+            self.view.show_error(f"Failed to update quantity: {str(e)}")
 
     def remove_item(self):
-        """Remove selected item from cart."""
         row = self.view.cart_table.currentRow()
         if row < 0:
-            QMessageBox.warning(self.view, "No Selection", "Please select an item to remove.")
+            self.view.show_warning("Please select an item to remove.")
             return
         
         self.cart.pop(row)
@@ -152,25 +131,16 @@ class POSController:
         self.update_total()
 
     def clear_cart(self):
-        """Clear all items from cart."""
         if not self.cart:
             return
         
-        reply = QMessageBox.question(
-            self.view,
-            "Clear Cart",
-            "Are you sure you want to clear the cart?",
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
-        )
-        
-        if reply == QMessageBox.StandardButton.Yes:
+        if self.view.ask_confirmation("Are you sure you want to clear the cart?", "Clear Cart"):
             self.cart.clear()
             self.view.clear_cart()
 
     def update_total(self):
-        """Update the total amount with VAT calculation."""
         subtotal = sum(item["price"] * item["qty"] for item in self.cart)
-        vat_amount = subtotal * 0.12  # 12% VAT
+        vat_amount = subtotal * 0.12
         total = subtotal + vat_amount
         
         self.view.subtotal_label.setText(f"Subtotal: Php {subtotal:,.2f}")
@@ -178,18 +148,15 @@ class POSController:
         self.view.total_label.setText(f"Total: Php {total:,.2f}")
 
     def checkout(self):
-        """Process the checkout with payment and receipt."""
-        print("[POS CONTROLLER] checkout() called")
         if not self.cart:
-            QMessageBox.warning(self.view, "Empty Cart", "Cart is empty.")
+            self.view.show_warning("Cart is empty.")
             return
 
         try:
             subtotal = sum(item["price"] * item["qty"] for item in self.cart)
             
-            # Open payment/receipt dialog
             from app.views.CheckoutReceiptDialog import CheckoutReceiptDialog
-            cashier_name = self.user.get('username') if self.user else None
+            cashier_name = self.user.get('full_name') if self.user else None
             
             checkout_dialog = CheckoutReceiptDialog(
                 items=self.cart,
@@ -201,7 +168,6 @@ class POSController:
             if checkout_dialog.exec() != CheckoutReceiptDialog.DialogCode.Accepted:
                 return
             
-            # Get payment details
             payment_details = checkout_dialog.get_payment_details()
             vat_amount = payment_details['vat_amount']
             total = payment_details['total']
@@ -209,23 +175,19 @@ class POSController:
             amount_received = payment_details['amount_received']
             change = payment_details['change']
             
-            # Validate payment
             if amount_received < total:
-                QMessageBox.warning(
-                    self.view,
-                    "Insufficient Payment",
-                    f"Amount received (Php {amount_received:,.2f}) is less than total (Php {total:,.2f})"
+                self.view.show_warning(
+                    f"Insufficient Payment. Amount received (Php {amount_received:,.2f}) is less than total (Php {total:,.2f})"
                 )
                 return
             
-            # Save transaction with payment details
             user_id = None
             try:
                 user_id = self.user.get('id') if self.user else None
             except Exception:
                 user_id = None
 
-            sale_id = self.model.save_transaction(
+            sale_id = self.service.save_transaction(
                 items=self.cart,
                 total=total,
                 user_id=user_id,
@@ -235,8 +197,6 @@ class POSController:
                 change=change
             )
             
-            # Show success with receipt
-            # Show receipt dialog with option to save PDF
             from app.views.ReceiptDisplayDialog import ReceiptDisplayDialog
             receipt_dialog = ReceiptDisplayDialog(
                 sale_id=sale_id,
@@ -247,21 +207,17 @@ class POSController:
                 payment_mode=payment_mode,
                 amount_received=amount_received,
                 change=change,
-                cashier_name=self.user.get('username') if self.user else None,
+                cashier_name=self.user.get('full_name') if self.user else None,
                 parent=self.view
             )
             receipt_dialog.exec()
             
-            # Clear cart
             self.cart.clear()
             self.view.clear_cart()
-            self.view.search_box.clear()
-            
-            # Refresh inventory table
             self.load_all_items()
+            self.view.show_success("Transaction completed successfully")
             
+        except (ValidationError, NotFoundError, DatabaseError) as e:
+            self.view.show_error(f"Checkout failed: {str(e)}")
         except Exception as e:
-            print(f"[POS CONTROLLER ERROR] checkout: {e}")
-            import traceback
-            traceback.print_exc()
-            QMessageBox.critical(self.view, "Error", f"Checkout failed: {str(e)}")
+            self.view.show_error(f"Unexpected error: {str(e)}")

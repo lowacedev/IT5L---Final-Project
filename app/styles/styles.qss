@@ -213,10 +213,9 @@ QPushButton:disabled {
     border-color: #c69500;
 }
 
-/* Logout - Dark */
-/* Logout - Light Red */
+
 #logout_button {
-    background-color: #FCA5A5; /* light red */
+    background-color: #FCA5A5;
     color: #111827;
     border: 1px solid #F87171;
 }

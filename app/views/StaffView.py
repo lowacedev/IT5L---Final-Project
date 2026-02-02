@@ -1,14 +1,14 @@
 from PyQt6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QTableWidget,
-    QLineEdit, QLabel, QFormLayout, QTableWidgetItem, QHeaderView,
-    QMessageBox, QFrame, QComboBox, QGridLayout
+    QVBoxLayout, QHBoxLayout, QPushButton, QTableWidget,
+    QLineEdit, QLabel, QTableWidgetItem, QHeaderView,
+    QFrame, QComboBox, QGridLayout
 )
 from PyQt6.QtCore import Qt
+from app.views.BaseView import BaseView
 
-class StaffView(QWidget):
+class StaffView(BaseView):
     def __init__(self):
         super().__init__()
-        print("[STAFF VIEW] Initializing StaffView...")
         self.setObjectName("content_area")
         
         layout = QVBoxLayout()
@@ -121,75 +121,54 @@ class StaffView(QWidget):
         
         layout.addWidget(self.table)
         self.setLayout(layout)
-        
-        print("[STAFF VIEW] StaffView initialization complete")
 
     def on_row_selected(self, index):
-        """Handle row selection and populate form."""
         row = self.table.currentRow()
         if row < 0:
             return
         
-        # Get data from table columns
         staff_id = self.table.item(row, 0).text()
         full_name = self.table.item(row, 1).text() if self.table.item(row,1) else ""
         username = self.table.item(row, 2).text()
         role = self.table.item(row, 3).text()
         
-        # Populate form fields
         self.full_name.setText(full_name)
         self.username.setText(username)
         self.role_dropdown.setCurrentText(role)
-        self.password.clear()  # Don't show password, but allow changing it
-        
-        print(f"[STAFF VIEW] Populated form with staff ID: {staff_id}")
+        self.password.clear()
 
     def load_table(self, items):
-        """Load staff into the table."""
-        print(f"[STAFF VIEW] Loading {len(items)} staff members into table")
         self.table.setRowCount(len(items))
         
         for r, item in enumerate(items):
-            for c, value in enumerate(item[:5]):  # id, full_name, username, role, created_at
+            values = [item.id, item.full_name, item.username, item.role, item.created_at]
+            for c, value in enumerate(values):
                 cell = QTableWidgetItem(str(value))
                 cell.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
                 self.table.setItem(r, c, cell)
 
-    def get_form_data(self, with_id=False):
-        """Get form data."""
+    def collect_form_data(self, with_id=False):
         full_name = self.full_name.text().strip()
         username = self.username.text().strip()
         password = self.password.text().strip()
         role = self.role_dropdown.currentText()
         
-        if not username:
-            QMessageBox.warning(self, "Validation", "Username is required.")
-            return None
-        
-        if not password and not with_id:
-            QMessageBox.warning(self, "Validation", "Password is required.")
-            return None
-        
         if with_id:
             selected_row = self.table.currentRow()
             if selected_row < 0:
-                QMessageBox.warning(self, "No Selection", "Please select a staff member to update.")
                 return None
-            
             staff_id = int(self.table.item(selected_row, 0).text())
             return (staff_id, full_name, username, password, role)
         
         return (full_name, username, password, role)
 
     def get_selected_id(self):
-        """Get ID of selected row."""
         row = self.table.currentRow()
         if row < 0:
             return None
         return int(self.table.item(row, 0).text())
 
     def clear_form(self):
-        """Clear the form."""
         self.full_name.clear()
         self.username.clear()
         self.password.clear()

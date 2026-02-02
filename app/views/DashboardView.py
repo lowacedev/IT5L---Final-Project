@@ -1,35 +1,34 @@
-from PyQt6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel, QFrame, QGridLayout, QPushButton, QComboBox
+from PyQt6.QtWidgets import QVBoxLayout, QHBoxLayout, QLabel, QFrame, QGridLayout, QPushButton, QComboBox
 from PyQt6.QtCore import Qt
 
 from datetime import datetime, timedelta
-from app.models.ReportsModel import ReportsModel
+from app.views.BaseView import BaseView
 
 from matplotlib.figure import Figure
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
 import matplotlib.pyplot as plt
+from matplotlib.ticker import FuncFormatter, MaxNLocator
 
 
-class DashboardView(QWidget):  
-    def __init__(self, db, user):
+class DashboardView(BaseView):  
+    def __init__(self, db, user, reports_service=None):
         super().__init__()
         self.db = db
         self.user = user if user else {'username': 'Guest', 'role': 'guest'}
+        self.reports_model = reports_service
         self.setObjectName("content_area")
 
         layout = QVBoxLayout()
-        layout.setContentsMargins(30, 30, 30, 30)
-        layout.setSpacing(20)
+        layout.setContentsMargins(10, 10, 10, 10)
+        layout.setSpacing(4)
 
-        # Header
-        header = QLabel(f"Welcome back, {user.get('username', 'User')}!")
+        header = QLabel(f"Welcome back, {user.get('full_name', 'User')}!")
         header.setObjectName("page_title")
         layout.addWidget(header)
 
-        # KPI Cards Grid
         kpi_grid = QGridLayout()
-        kpi_grid.setSpacing(20)
+        kpi_grid.setSpacing(12)
 
-        # Create KPI cards
         kpi1 = self.make_kpi_card("Today's Sales", "Php 0.00", "SALES", attr_name='kpi_sales_label')
         kpi2 = self.make_kpi_card("Transactions", "0", "TRANS", attr_name='kpi_transactions_label')
         kpi3 = self.make_kpi_card("Total Products", "0", "ITEMS", attr_name='kpi_total_products_label')
@@ -40,10 +39,9 @@ class DashboardView(QWidget):
 
         layout.addLayout(kpi_grid)
 
-        # Two-column chart layout
         charts_container = QHBoxLayout()
+        charts_container.setSpacing(4)
 
-        # Left chart - Sales Trend
         left_chart_frame = QFrame()
         left_chart_frame.setObjectName("chart_frame")
         left_chart_layout = QVBoxLayout(left_chart_frame)
@@ -53,7 +51,7 @@ class DashboardView(QWidget):
         left_chart_title.setObjectName("section_title")
         left_chart_layout.addWidget(left_chart_title)
 
-        # Period selector (Daily/Weekly/Monthly) - hidden for now
+        
         self.period_selector = QComboBox()
         self.period_selector.addItems(["Daily", "Weekly", "Monthly"])
         self.period_selector.setVisible(False)
@@ -61,13 +59,13 @@ class DashboardView(QWidget):
         self.refresh_btn = QPushButton("Refresh")
         self.refresh_btn.setVisible(False)
 
-        # Matplotlib canvas for sales trend - responsive sizing
+      
         self.fig_sales = Figure(figsize=(6.5, 3.5), dpi=80)
-        # Use white figure background so the chart blends with app backgrounds
+       
         self.fig_sales.patch.set_facecolor('#FFFFFF')
         self.canvas_sales = FigureCanvas(self.fig_sales)
-        self.canvas_sales.setMinimumHeight(320)
-        # Ensure the Qt widget background matches the figure
+        self.canvas_sales.setMinimumHeight(450)
+        
         try:
             self.canvas_sales.setStyleSheet('background-color: white;')
         except Exception:
@@ -76,22 +74,24 @@ class DashboardView(QWidget):
 
         charts_container.addWidget(left_chart_frame, 1)
 
-        # Right chart - Top Selling Items
         right_chart_frame = QFrame()
         right_chart_frame.setObjectName("chart_frame")
         right_chart_layout = QVBoxLayout(right_chart_frame)
-        right_chart_layout.setContentsMargins(10, 10, 10, 10)
+        right_chart_layout.setContentsMargins(50, 10, 10, 10)
         right_chart_layout.setSpacing(10)
 
         right_chart_title = QLabel("Top Selling Items")
         right_chart_title.setObjectName("section_title")
         right_chart_layout.addWidget(right_chart_title)
 
-        # Matplotlib canvas for top items - responsive sizing
         self.fig_items = Figure(figsize=(6.5, 3.5), dpi=80)
         self.fig_items.patch.set_facecolor('#FFFFFF')
         self.canvas_items = FigureCanvas(self.fig_items)
         self.canvas_items.setMinimumHeight(320)
+        try:
+            self.canvas_items.setMinimumWidth(560)
+        except Exception:
+            pass
         try:
             self.canvas_items.setStyleSheet('background-color: white;')
         except Exception:
@@ -104,60 +104,38 @@ class DashboardView(QWidget):
 
         self.setLayout(layout)
 
-        # Load chart data
-        try:
-            self.reports_model = ReportsModel()
-            self.load_sales_chart()
-            self.load_top_items_chart()
-        except Exception as e:
-            print(f"[DASHBOARD] Failed to initialize reports model: {e}")
-
     def make_kpi_card(self, title, value, icon, attr_name=None, comparison_attr=None):
-        """Create a KPI card widget."""
         card = QFrame()
         card.setObjectName("kpi_card")
+        
+        
+        card.setMaximumHeight(200)  
+        card.setMinimumHeight(100)  
+        
         card_layout = QVBoxLayout(card)
-        card_layout.setContentsMargins(20, 20, 20, 20)
-        card_layout.setSpacing(10)
-
-        # Icon and Title
-        header_layout = QHBoxLayout()
-        # For the main KPIs we don't want the blue short-icon text (SALES/TRANS/ITEMS),
-        # so only add the icon label when it's not one of those tokens.
-        icon_label = None
-        if icon not in ("SALES", "TRANS", "ITEMS"):
-            icon_label = QLabel(icon)
-            icon_label.setStyleSheet("font-size: 12px; font-weight: bold; color: #3B82F6;")
+        card_layout.setContentsMargins(12, 12, 12, 12)
+        card_layout.setSpacing(8)  
 
         title_label = QLabel(title)
         title_label.setObjectName("kpi_title")
+        title_label.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop)
+        card_layout.addWidget(title_label)
+        
+        card_layout.addStretch()
 
-        if icon_label is not None:
-            header_layout.addWidget(icon_label)
-        header_layout.addWidget(title_label)
-        header_layout.addStretch()
-
-        # Value
+        footer_layout = QHBoxLayout()
+        footer_layout.addStretch()
         value_label = QLabel(value)
         value_label.setObjectName("kpi_value")
-        # Right-align numeric KPI values for better readability
-        value_label.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
-
-        # Optionally expose the label on the view for controller updates
+        value_label.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignBottom)
+        
         if attr_name:
             setattr(self, attr_name, value_label)
-
-        card_layout.addLayout(header_layout)
-        card_layout.addWidget(value_label)
         
-        # Comparison label (optional)
-        if comparison_attr:
-            comparison_label = QLabel("")
-            comparison_label.setStyleSheet("font-size: 12px; font-weight: bold;")
-            comparison_label.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
-            setattr(self, comparison_attr, comparison_label)
-            card_layout.addWidget(comparison_label)
+        footer_layout.addWidget(value_label)
 
+        card_layout.addLayout(footer_layout)
+        
         return card
 
     def make_action_card(self, icon, title, description):
@@ -208,8 +186,9 @@ class DashboardView(QWidget):
                 p = period
 
             data = self.reports_model.get_sales_aggregate(start_str, end_str, period=p)
-            ax = self.fig_sales.subplots()
-            ax.clear()
+            # Clear the figure and create a fresh axes to avoid stacking/overlap
+            self.fig_sales.clear()
+            ax = self.fig_sales.add_subplot(111)
 
             if not data:
                 ax.text(0.5, 0.5, 'No sales data', ha='center', va='center', color='#6B7280', fontsize=14)
@@ -219,9 +198,12 @@ class DashboardView(QWidget):
             labels = [str(r[0]) for r in data]
             totals = [float(r[1]) if r[1] is not None else 0.0 for r in data]
 
-            # Enhanced styling
-            ax.plot(labels, totals, marker='o', color='#3B82F6', linewidth=2.5, markersize=8, label='Revenue')
-            ax.fill_between(range(len(labels)), totals, color='#3B82F6', alpha=0.15)
+            # Use numeric x positions (avoids categorical axis quirks) and set xtick labels
+            x = list(range(len(labels)))
+            ax.plot(x, totals, marker='o', color='#3B82F6', linewidth=2.5, markersize=8, label='Revenue')
+            ax.fill_between(x, totals, color='#3B82F6', alpha=0.15)
+            ax.set_xticks(x)
+            ax.set_xticklabels(labels, rotation=45, fontsize=9)
             
             # Styling
             ax.set_title('Sales Trend', fontsize=14, fontweight='bold', pad=15)
@@ -230,8 +212,19 @@ class DashboardView(QWidget):
             ax.grid(True, alpha=0.3, linestyle='--', linewidth=0.8)
             ax.set_axisbelow(True)
             
-            # Format y-axis as currency
-            ax.yaxis.set_major_formatter(plt.FuncFormatter(lambda x, p: f'Php {x/1000:.0f}K' if x >= 1000 else f'Php {x:.0f}'))
+            # Format y-axis as currency with sensible tick locator
+            ax.yaxis.set_major_locator(MaxNLocator(nbins=6))
+            def currency_fmt(x, pos):
+                try:
+                    x = float(x)
+                except Exception:
+                    return ''
+                if abs(x) >= 1_000_000:
+                    return f'Php {x/1_000_000:.1f}M'
+                if abs(x) >= 1000:
+                    return f'Php {x/1000:.0f}K'
+                return f'Php {x:.0f}'
+            ax.yaxis.set_major_formatter(FuncFormatter(currency_fmt))
             
             # Improve x-axis labels
             ax.tick_params(axis='x', rotation=45, labelsize=9)
@@ -243,7 +236,7 @@ class DashboardView(QWidget):
             # Apply padding and reasonable subplot margins so labels don't get clipped
             try:
                 self.fig_sales.tight_layout(pad=1.6)
-                self.fig_sales.subplots_adjust(left=0.12, right=0.98, top=0.88, bottom=0.12)
+                self.fig_sales.subplots_adjust(left=0.12, right=0.98, top=0.88, bottom=0.18)
             except Exception:
                 try:
                     self.fig_sales.tight_layout()
@@ -258,15 +251,16 @@ class DashboardView(QWidget):
         """Load and display top-selling items chart with Matplotlib."""
         try:
             data = self.reports_model.get_top_selling_items(limit=10)
-            ax = self.fig_items.subplots()
-            ax.clear()
+            # Clear the figure and create fresh axes to prevent overlapping axes/text
+            self.fig_items.clear()
+            ax = self.fig_items.add_subplot(111)
 
             if not data:
                 ax.text(0.5, 0.5, 'No sales data', ha='center', va='center', color='#6B7280', fontsize=14)
                 self.canvas_items.draw()
                 return
 
-            items = [str(r[1])[:20] for r in data]  # Shorter labels for responsive fit
+            items = [str(r[1])[:30] for r in data]  # Shorter labels for responsive fit
             quantities = [int(r[3]) for r in data]
 
             y_pos = list(range(len(items)))[::-1]
@@ -280,6 +274,9 @@ class DashboardView(QWidget):
             
             ax.set_yticks(y_pos)
             ax.set_yticklabels(items, fontsize=9)
+            # Ensure bars don't overflow into neighboring widgets
+            if quantities:
+                ax.set_xlim(0, max(quantities) * 1.12)
             ax.set_xlabel('Quantity Sold', fontsize=11, fontweight='bold')
             ax.set_title('Top Selling Items (by Qty)', fontsize=14, fontweight='bold', pad=15)
             ax.grid(True, axis='x', alpha=0.3, linestyle='--', linewidth=0.8)
@@ -292,7 +289,8 @@ class DashboardView(QWidget):
             # Add slightly larger padding and adjust subplot margins for horizontal bars
             try:
                 self.fig_items.tight_layout(pad=1.6)
-                self.fig_items.subplots_adjust(left=0.12, right=0.98, top=0.88, bottom=0.12)
+                # Shift axes to the right inside the figure so y-labels are rendered within canvas
+                self.fig_items.subplots_adjust(left=0.32, right=0.98, top=0.88, bottom=0.12)
             except Exception:
                 try:
                     self.fig_items.tight_layout()

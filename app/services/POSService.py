@@ -1,104 +1,154 @@
+from mysql.connector import Error
+from app.models.entities import InventoryItem, Sale, SaleItem
+from app.exceptions import ValidationError, NotFoundError, DatabaseError
+
+
 class POSService:
-    
-    
     def __init__(self, db):
         self.db = db
-        self.cursor = db.cursor()
 
     def fetch_all(self):
-        """Fetch all inventory items for initial display."""
-        sql = """
-        SELECT id, part_name, selling_price, quantity 
-        FROM inventory_items 
-        ORDER BY part_name
-        """
+        cursor = None
         try:
-            self.cursor.execute(sql)
-            results = self.cursor.fetchall()
-            print(f"[POS SERVICE] Fetched {len(results)} total inventory items")
-            return results
-        except Exception as e:
-            print(f"[POS SERVICE ERROR] fetch_all: {e}")
-            return []
+            cursor = self.db.cursor()
+            cursor.execute("""
+                SELECT id, part_name, category, brand, model_number, 
+                       quantity, cost_price, selling_price, supplier_id
+                FROM inventory_items
+                ORDER BY part_name
+            """)
+            results = cursor.fetchall()
+            return [self._map_row_to_item(row) for row in results]
+        except Error as e:
+            raise DatabaseError(f"Failed to fetch inventory: {str(e)}")
+        finally:
+            if cursor:
+                cursor.close()
 
     def search_item(self, keyword):
-        """Search for items by part name."""
-        sql = """
-        SELECT id, part_name, selling_price, quantity 
-        FROM inventory_items 
-        WHERE part_name LIKE %s OR category LIKE %s OR brand LIKE %s
-        ORDER BY part_name
-        """
-        search_term = "%" + keyword + "%"
+        if not keyword or not keyword.strip():
+            raise ValidationError("Search keyword cannot be empty")
+        
+        cursor = None
         try:
-            self.cursor.execute(sql, (search_term, search_term, search_term))
-            results = self.cursor.fetchall()
-            print(f"[POS SERVICE] Found {len(results)} items matching '{keyword}'")
-            return results
-        except Exception as e:
-            print(f"[POS SERVICE ERROR] search_item: {e}")
-            return []
+            cursor = self.db.cursor()
+            search_term = f"%{keyword}%"
+            cursor.execute("""
+                SELECT id, part_name, category, brand, model_number, 
+                       quantity, cost_price, selling_price, supplier_id
+                FROM inventory_items
+                WHERE part_name LIKE %s OR category LIKE %s OR brand LIKE %s
+                ORDER BY part_name
+            """, (search_term, search_term, search_term))
+            results = cursor.fetchall()
+            return [self._map_row_to_item(row) for row in results]
+        except Error as e:
+            raise DatabaseError(f"Failed to search items: {str(e)}")
+        finally:
+            if cursor:
+                cursor.close()
 
-    def save_transaction(self, items, total, user_id=None, vat_amount=0, payment_mode=None, amount_received=0, change=0):
-        """Save a sale transaction and update stock.
-
-        user_id: optional integer id of the cashier/user who processed the sale.
-        vat_amount: VAT amount (12% of subtotal).
-        payment_mode: Payment method ('Cash', 'Card', 'Gcash').
-        amount_received: Amount tendered by customer.
-        change: Change to give back to customer.
-        """
+    def save_transaction(self, items, total, user_id=None, vat_amount=0.0, payment_mode=None, amount_received=0.0, change=0.0):
+        if not items:
+            raise ValidationError("Transaction must have at least one item")
+        
         try:
-            print(f"[POS SERVICE] Saving transaction with {len(items)} items, total: Php {total:,.2f}, VAT: Php {vat_amount:,.2f}, Mode: {payment_mode}")
+            total = float(total)
+            vat_amount = float(vat_amount)
+            amount_received = float(amount_received)
+            change = float(change)
+        except (ValueError, TypeError):
+            raise ValidationError("Invalid total or payment values")
+        
+        if total <= 0:
+            raise ValidationError("Total must be greater than zero")
+        
+        if amount_received < total:
+            raise ValidationError(f"Insufficient payment: received {amount_received}, required {total}")
+        
+        cursor = None
+        try:
+            cursor = self.db.cursor()
             
-            sql_sale = """INSERT INTO sales (total, user_id, vat_amount, payment_mode, amount_received, change_amount) 
-                         VALUES (%s, %s, %s, %s, %s, %s)"""
-            self.cursor.execute(sql_sale, (total, user_id, vat_amount, payment_mode, amount_received, change))
-            sale_id = self.cursor.lastrowid
-            print(f"[POS SERVICE] Created sale with ID: {sale_id}")
-
-            sql_item = """
-                INSERT INTO sale_items (sale_id, item_id, quantity, price)
-                VALUES (%s, %s, %s, %s)
-            """
-            sql_update_stock = """
-                UPDATE inventory_items 
-                SET quantity = quantity - %s 
-                WHERE id = %s
-            """
+            cursor.execute("""
+                INSERT INTO sales (total, user_id, vat_amount, payment_mode, amount_received, change_amount)
+                VALUES (%s, %s, %s, %s, %s, %s)
+            """, (total, user_id, vat_amount, payment_mode, amount_received, change))
+            
+            sale_id = cursor.lastrowid
             
             for item in items:
-                self.cursor.execute(sql_item, (
-                    sale_id, 
-                    item["id"], 
-                    item["qty"], 
-                    item["price"]
-                ))
+                item_id = item.get("id")
+                qty = item.get("qty")
+                price = item.get("price")
                 
-                self.cursor.execute(sql_update_stock, (
-                    item["qty"], 
-                    item["id"]
-                ))
-                print(f"[POS SERVICE] Added {item['qty']}x {item['name']} to sale")
-
-            self.db.commit()
-            print(f"[POS SERVICE] Transaction saved successfully")
-            return sale_id
+                if not item_id or not qty or not price:
+                    raise ValidationError("Invalid item data in transaction")
+                
+                try:
+                    qty = int(qty)
+                    price = float(price)
+                except (ValueError, TypeError):
+                    raise ValidationError("Invalid quantity or price in transaction")
+                
+                cursor.execute("""
+                    SELECT quantity FROM inventory_items WHERE id = %s
+                """, (item_id,))
+                result = cursor.fetchone()
+                if not result:
+                    raise NotFoundError(f"Item ID {item_id} not found")
+                
+                current_qty = result[0]
+                if current_qty < qty:
+                    raise ValidationError(f"Insufficient stock for item {item_id}: available {current_qty}, requested {qty}")
+                
+                cursor.execute("""
+                    INSERT INTO sale_items (sale_id, item_id, quantity, price)
+                    VALUES (%s, %s, %s, %s)
+                """, (sale_id, item_id, qty, price))
+                
+                cursor.execute("""
+                    UPDATE inventory_items SET quantity = quantity - %s WHERE id = %s
+                """, (qty, item_id))
             
-        except Exception as e:
+            self.db.commit()
+            return sale_id
+        except (ValidationError, NotFoundError):
             self.db.rollback()
-            print(f"[POS SERVICE ERROR] save_transaction: {e}")
-            raise e
+            raise
+        except Error as e:
+            self.db.rollback()
+            raise DatabaseError(f"Failed to save transaction: {str(e)}")
+        finally:
+            if cursor:
+                cursor.close()
 
     def get_item_stock(self, item_id):
-        """Get current stock for an item."""
-        sql = "SELECT quantity FROM inventory_items WHERE id = %s"
+        cursor = None
         try:
-            self.cursor.execute(sql, (item_id,))
-            result = self.cursor.fetchone()
-            stock = result[0] if result else 0
-            print(f"[POS SERVICE] Item {item_id} stock: {stock}")
-            return stock
-        except Exception as e:
-            print(f"[POS SERVICE ERROR] get_item_stock: {e}")
-            return 0
+            cursor = self.db.cursor()
+            cursor.execute("""
+                SELECT quantity FROM inventory_items WHERE id = %s
+            """, (item_id,))
+            result = cursor.fetchone()
+            return result[0] if result else 0
+        except Error as e:
+            raise DatabaseError(f"Failed to get item stock: {str(e)}")
+        finally:
+            if cursor:
+                cursor.close()
+
+    def _map_row_to_item(self, row):
+        if not row:
+            return None
+        return InventoryItem(
+            id=row[0],
+            part_name=row[1],
+            category=row[2],
+            brand=row[3],
+            model_number=row[4],
+            quantity=row[5],
+            cost_price=row[6],
+            selling_price=row[7],
+            supplier_id=row[8]
+        )

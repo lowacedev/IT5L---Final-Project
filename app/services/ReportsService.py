@@ -1,17 +1,16 @@
-from app.core.db import get_db
+from mysql.connector import Error
+from app.exceptions import DatabaseError
 
 
 class ReportsService:
-   
-
-    def __init__(self):
-        self.conn = get_db()
+    def __init__(self, db):
+        self.db = db
 
     def get_sales_by_date_range(self, start_date, end_date):
-        """Get sales data for a date range."""
+        cursor = None
         try:
-            cursor = self.conn.cursor()
-            query = """
+            cursor = self.db.cursor()
+            cursor.execute("""
                 SELECT 
                     DATE(sale_date) as date,
                     COUNT(*) as num_transactions,
@@ -21,47 +20,45 @@ class ReportsService:
                 WHERE DATE(sale_date) BETWEEN %s AND %s
                 GROUP BY DATE(sale_date)
                 ORDER BY date DESC
-            """
-            cursor.execute(query, (start_date, end_date))
-            data = cursor.fetchall()
-            cursor.close()
-            return data if data else []
-        except Exception as e:
-            print(f"[REPORTS SERVICE ERROR] get_sales_by_date_range: {e}")
-            return []
+            """, (start_date, end_date))
+            return cursor.fetchall()
+        except Error as e:
+            raise DatabaseError(f"Failed to get sales by date range: {str(e)}")
+        finally:
+            if cursor:
+                cursor.close()
 
     def get_sales_by_date_range_detailed(self, start_date, end_date):
-        """Get detailed transaction data for a date range."""
+        cursor = None
         try:
-            cursor = self.conn.cursor()
-            query = """
+            cursor = self.db.cursor()
+            cursor.execute("""
                 SELECT 
                     s.id,
                     DATE(s.sale_date) as date,
                     TIME(s.sale_date) as time,
                     s.total,
-                    COUNT(si.id) as items_count,
+                    COALESCE(COUNT(si.id), 0) as items_count,
                     COALESCE(u.full_name, u.username) as cashier
                 FROM sales s
                 LEFT JOIN sale_items si ON s.id = si.sale_id
                 LEFT JOIN users u ON s.user_id = u.id
                 WHERE DATE(s.sale_date) BETWEEN %s AND %s
-                GROUP BY s.id, DATE(s.sale_date), TIME(s.sale_date), s.total, cashier
+                GROUP BY s.id, DATE(s.sale_date), TIME(s.sale_date), s.total, u.id, u.username, u.full_name
                 ORDER BY s.sale_date DESC
-            """
-            cursor.execute(query, (start_date, end_date))
-            data = cursor.fetchall()
-            cursor.close()
-            return data if data else []
-        except Exception as e:
-            print(f"[REPORTS SERVICE ERROR] get_sales_by_date_range_detailed: {e}")
-            return []
+            """, (start_date, end_date))
+            return cursor.fetchall()
+        except Error as e:
+            raise DatabaseError(f"Failed to get detailed sales: {str(e)}")
+        finally:
+            if cursor:
+                cursor.close()
 
     def get_top_selling_items(self, limit=10):
-        """Get top selling items by quantity sold."""
+        cursor = None
         try:
-            cursor = self.conn.cursor()
-            query = """
+            cursor = self.db.cursor()
+            cursor.execute("""
                 SELECT 
                     i.id,
                     i.part_name,
@@ -74,20 +71,19 @@ class ReportsService:
                 GROUP BY i.id, i.part_name, i.category
                 ORDER BY total_quantity DESC
                 LIMIT %s
-            """
-            cursor.execute(query, (limit,))
-            data = cursor.fetchall()
-            cursor.close()
-            return data if data else []
-        except Exception as e:
-            print(f"[REPORTS SERVICE ERROR] get_top_selling_items: {e}")
-            return []
+            """, (limit,))
+            return cursor.fetchall()
+        except Error as e:
+            raise DatabaseError(f"Failed to get top selling items: {str(e)}")
+        finally:
+            if cursor:
+                cursor.close()
 
     def get_inventory_summary(self):
-        """Get inventory summary - stock levels and values."""
+        cursor = None
         try:
-            cursor = self.conn.cursor()
-            query = """
+            cursor = self.db.cursor()
+            cursor.execute("""
                 SELECT 
                     id,
                     part_name,
@@ -100,20 +96,19 @@ class ReportsService:
                     (quantity * (selling_price - cost_price)) as potential_profit
                 FROM inventory_items
                 ORDER BY quantity ASC
-            """
-            cursor.execute(query)
-            data = cursor.fetchall()
-            cursor.close()
-            return data if data else []
-        except Exception as e:
-            print(f"[REPORTS SERVICE ERROR] get_inventory_summary: {e}")
-            return []
+            """)
+            return cursor.fetchall()
+        except Error as e:
+            raise DatabaseError(f"Failed to get inventory summary: {str(e)}")
+        finally:
+            if cursor:
+                cursor.close()
 
     def get_low_stock_items(self, threshold=5):
-        """Get items with stock below threshold."""
+        cursor = None
         try:
-            cursor = self.conn.cursor()
-            query = """
+            cursor = self.db.cursor()
+            cursor.execute("""
                 SELECT 
                     id,
                     part_name,
@@ -123,20 +118,19 @@ class ReportsService:
                 FROM inventory_items
                 WHERE quantity <= %s
                 ORDER BY quantity ASC
-            """
-            cursor.execute(query, (threshold,))
-            data = cursor.fetchall()
-            cursor.close()
-            return data if data else []
-        except Exception as e:
-            print(f"[REPORTS SERVICE ERROR] get_low_stock_items: {e}")
-            return []
+            """, (threshold,))
+            return cursor.fetchall()
+        except Error as e:
+            raise DatabaseError(f"Failed to get low stock items: {str(e)}")
+        finally:
+            if cursor:
+                cursor.close()
 
     def get_supplier_performance(self):
-        """Get supplier performance - total sales value and items sold."""
+        cursor = None
         try:
-            cursor = self.conn.cursor()
-            query = """
+            cursor = self.db.cursor()
+            cursor.execute("""
                 SELECT 
                     s.id,
                     s.name,
@@ -148,20 +142,19 @@ class ReportsService:
                 LEFT JOIN sale_items si ON i.id = si.item_id
                 GROUP BY s.id, s.name
                 ORDER BY total_revenue DESC
-            """
-            cursor.execute(query)
-            data = cursor.fetchall()
-            cursor.close()
-            return data if data else []
-        except Exception as e:
-            print(f"[REPORTS SERVICE ERROR] get_supplier_performance: {e}")
-            return []
+            """)
+            return cursor.fetchall()
+        except Error as e:
+            raise DatabaseError(f"Failed to get supplier performance: {str(e)}")
+        finally:
+            if cursor:
+                cursor.close()
 
     def get_daily_summary(self, date):
-        """Get summary for a specific day."""
+        cursor = None
         try:
-            cursor = self.conn.cursor()
-            query = """
+            cursor = self.db.cursor()
+            cursor.execute("""
                 SELECT 
                     COUNT(*) as total_transactions,
                     SUM(total) as total_revenue,
@@ -171,37 +164,36 @@ class ReportsService:
                     SUM((SELECT COUNT(*) FROM sale_items si WHERE si.sale_id = s.id)) as total_items
                 FROM sales s
                 WHERE DATE(sale_date) = %s
-            """
-            cursor.execute(query, (date,))
-            data = cursor.fetchone()
-            cursor.close()
-            return data if data else None
-        except Exception as e:
-            print(f"[REPORTS SERVICE ERROR] get_daily_summary: {e}")
-            return None
+            """, (date,))
+            return cursor.fetchone()
+        except Error as e:
+            raise DatabaseError(f"Failed to get daily summary: {str(e)}")
+        finally:
+            if cursor:
+                cursor.close()
 
     def get_daily_revenue(self, date):
-        """Get total revenue for a specific day."""
+        cursor = None
         try:
-            cursor = self.conn.cursor()
-            query = """
+            cursor = self.db.cursor()
+            cursor.execute("""
                 SELECT COALESCE(SUM(total), 0) as total_revenue
                 FROM sales
                 WHERE DATE(sale_date) = %s
-            """
-            cursor.execute(query, (date,))
+            """, (date,))
             data = cursor.fetchone()
-            cursor.close()
             return float(data[0]) if data and data[0] is not None else 0.0
-        except Exception as e:
-            print(f"[REPORTS SERVICE ERROR] get_daily_revenue: {e}")
-            return 0.0
+        except Error as e:
+            raise DatabaseError(f"Failed to get daily revenue: {str(e)}")
+        finally:
+            if cursor:
+                cursor.close()
 
     def get_category_performance(self):
-        """Get sales performance by category."""
+        cursor = None
         try:
-            cursor = self.conn.cursor()
-            query = """
+            cursor = self.db.cursor()
+            cursor.execute("""
                 SELECT 
                     i.category,
                     COUNT(DISTINCT si.sale_id) as num_sales,
@@ -212,23 +204,18 @@ class ReportsService:
                 JOIN inventory_items i ON si.item_id = i.id
                 GROUP BY i.category
                 ORDER BY total_revenue DESC
-            """
-            cursor.execute(query)
-            data = cursor.fetchall()
-            cursor.close()
-            return data if data else []
-        except Exception as e:
-            print(f"[REPORTS SERVICE ERROR] get_category_performance: {e}")
-            return []
+            """)
+            return cursor.fetchall()
+        except Error as e:
+            raise DatabaseError(f"Failed to get category performance: {str(e)}")
+        finally:
+            if cursor:
+                cursor.close()
 
     def get_sales_aggregate(self, start_date, end_date, period='daily'):
-        """Get aggregated sales by period.
-
-        period: 'daily', 'weekly', or 'monthly'
-        Returns list of tuples (period_label, total_revenue)
-        """
+        cursor = None
         try:
-            cursor = self.conn.cursor()
+            cursor = self.db.cursor()
             if period == 'daily':
                 query = """
                     SELECT DATE(sale_date) as label, SUM(total) as total_revenue
@@ -256,18 +243,18 @@ class ReportsService:
                 """
 
             cursor.execute(query, (start_date, end_date))
-            data = cursor.fetchall()
-            cursor.close()
-            return data if data else []
-        except Exception as e:
-            print(f"[REPORTS SERVICE ERROR] get_sales_aggregate: {e}")
-            return []
+            return cursor.fetchall()
+        except Error as e:
+            raise DatabaseError(f"Failed to get sales aggregate: {str(e)}")
+        finally:
+            if cursor:
+                cursor.close()
 
     def export_sales_to_csv(self, start_date, end_date):
-        """Get detailed sales data for CSV export."""
+        cursor = None
         try:
-            cursor = self.conn.cursor()
-            query = """
+            cursor = self.db.cursor()
+            cursor.execute("""
                 SELECT 
                     s.id as transaction_id,
                     s.sale_date,
@@ -283,11 +270,10 @@ class ReportsService:
                 LEFT JOIN users u ON s.user_id = u.id
                 WHERE DATE(s.sale_date) BETWEEN %s AND %s
                 ORDER BY s.sale_date DESC, s.id DESC
-            """
-            cursor.execute(query, (start_date, end_date))
-            data = cursor.fetchall()
-            cursor.close()
-            return data if data else []
-        except Exception as e:
-            print(f"[REPORTS SERVICE ERROR] export_sales_to_csv: {e}")
-            return []
+            """, (start_date, end_date))
+            return cursor.fetchall()
+        except Error as e:
+            raise DatabaseError(f"Failed to export sales data: {str(e)}")
+        finally:
+            if cursor:
+                cursor.close()

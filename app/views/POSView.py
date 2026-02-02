@@ -1,28 +1,26 @@
 from PyQt6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QTableWidget,
-    QLineEdit, QLabel, QTableWidgetItem, QHeaderView, QFrame, QMessageBox
+    QVBoxLayout, QHBoxLayout, QPushButton, QTableWidget,
+    QLineEdit, QLabel, QTableWidgetItem, QHeaderView, QFrame
 )
 from PyQt6.QtCore import Qt
-import re
+from app.views.BaseView import BaseView
 
-class POSView(QWidget):
+
+class POSView(BaseView):
     def __init__(self):
         super().__init__()
-        print("[POS VIEW] Initializing POSView...")
         self.setObjectName("content_area")
         
         layout = QHBoxLayout()
         layout.setContentsMargins(30, 30, 30, 30)
         layout.setSpacing(20)
 
-        # Left Panel - Product Search
         left_panel = QFrame()
         left_panel.setObjectName("form_frame")
         left_layout = QVBoxLayout(left_panel)
         left_layout.setContentsMargins(20, 20, 20, 20)
         left_layout.setSpacing(15)
 
-        # Search Section
         search_label = QLabel("Product Search")
         search_label.setObjectName("section_title")
         left_layout.addWidget(search_label)
@@ -39,7 +37,6 @@ class POSView(QWidget):
         search_row.addWidget(self.search_btn)
         left_layout.addLayout(search_row)
 
-        # Search Results Table
         results_label = QLabel("Search Results (Double-click to add)")
         results_label.setStyleSheet("color: #6B7280; font-size: 12px;")
         left_layout.addWidget(results_label)
@@ -56,14 +53,12 @@ class POSView(QWidget):
 
         layout.addWidget(left_panel, stretch=3)
 
-        # Right Panel - Cart
         right_panel = QFrame()
         right_panel.setObjectName("form_frame")
         right_layout = QVBoxLayout(right_panel)
         right_layout.setContentsMargins(20, 20, 20, 20)
         right_layout.setSpacing(15)
 
-        # Cart Header
         cart_header = QHBoxLayout()
         cart_label = QLabel("Shopping Cart")
         cart_label.setObjectName("section_title")
@@ -76,12 +71,10 @@ class POSView(QWidget):
         cart_header.addWidget(self.clear_cart_btn)
         right_layout.addLayout(cart_header)
 
-        # Cart Table (ID removed from view: columns are Name, Qty, Price, Total)
         self.cart_table = QTableWidget()
         self.cart_table.setObjectName("data_table")
         self.cart_table.setColumnCount(4)
         self.cart_table.setHorizontalHeaderLabels(["Name", "Qty", "Price", "Total"])
-        # Make the Name column stretch and Price/Total sized to contents
         self.cart_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
         self.cart_table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
         self.cart_table.horizontalHeader().setSectionResizeMode(3, QHeaderView.ResizeMode.ResizeToContents)
@@ -89,7 +82,6 @@ class POSView(QWidget):
         self.cart_table.setAlternatingRowColors(True)
         right_layout.addWidget(self.cart_table)
 
-        # Quantity Controls
         qty_frame = QFrame()
         qty_layout = QHBoxLayout(qty_frame)
         qty_layout.setContentsMargins(0, 0, 0, 0)
@@ -113,7 +105,6 @@ class POSView(QWidget):
         
         right_layout.addWidget(qty_frame)
 
-        # Total and Checkout
         total_frame = QFrame()
         total_frame.setObjectName("total_frame")
         total_layout = QVBoxLayout(total_frame)
@@ -144,14 +135,11 @@ class POSView(QWidget):
         layout.addWidget(right_panel, stretch=2)
 
         self.setLayout(layout)
-        print("[POS VIEW] POSView initialization complete")
 
     def add_result(self, results):
-        """Display search results."""
         self.results_table.setRowCount(len(results))
         for r, item in enumerate(results):
             for c, value in enumerate(item):
-                # Format price column with commas and currency
                 if c == 2:
                     try:
                         price = float(value)
@@ -165,13 +153,11 @@ class POSView(QWidget):
                 self.results_table.setItem(r, c, cell)
 
     def add_to_cart(self, item_id, name, qty, price):
-        """Add item to cart table."""
         row = self.cart_table.rowCount()
         self.cart_table.insertRow(row)
         
         total = qty * price
         
-        # Populate visible columns: Name (0), Qty (1), Price (2), Total (3)
         name_item = QTableWidgetItem(name)
         name_item.setTextAlignment(Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft)
         self.cart_table.setItem(row, 0, name_item)
@@ -189,9 +175,7 @@ class POSView(QWidget):
         self.cart_table.setItem(row, 3, total_item)
 
     def update_cart_row(self, row, qty, price):
-        """Update quantity and total for a cart row."""
         total = qty * price
-        # Columns: 0=Name, 1=Qty, 2=Price, 3=Total
         self.cart_table.setItem(row, 1, QTableWidgetItem(str(qty)))
         self.cart_table.setItem(row, 3, QTableWidgetItem(f"{total:,.2f}"))
 
@@ -201,9 +185,22 @@ class POSView(QWidget):
                 item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
 
     def clear_cart(self):
-        """Clear all items from cart."""
         self.cart_table.setRowCount(0)
         self.subtotal_label.setText("Subtotal: Php 0.00")
         self.vat_label.setText("VAT (12%): Php 0.00")
         self.total_label.setText("Total: Php 0.00")
         self.qty_input.clear()
+        self.search_box.clear()
+        self.results_table.clearSelection()
+        self.cart_table.clearSelection()
+
+    def get_cart_data(self):
+        return [
+            {
+                "name": self.cart_table.item(row, 0).text(),
+                "qty": int(self.cart_table.item(row, 1).text()),
+                "price": float(self.cart_table.item(row, 2).text().replace(",", "").replace("Php", "").strip()),
+                "total": float(self.cart_table.item(row, 3).text().replace(",", "").replace("Php", "").strip())
+            }
+            for row in range(self.cart_table.rowCount())
+        ]

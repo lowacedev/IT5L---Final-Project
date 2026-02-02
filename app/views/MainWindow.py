@@ -5,10 +5,10 @@ from app.views.InventoryView import InventoryView
 from app.views.POSView import POSView
 from app.views.DashboardView import DashboardView
 from app.views.ReportsView import ReportsView
-from app.models.InventoryModel import InventoryModel
-from app.models.SupplierModel import SupplierModel
-from app.models.POSModel import POSModel
-from app.models.ReportsModel import ReportsModel
+from app.services.InventoryService import InventoryService
+from app.services.SupplierService import SupplierService
+from app.services.POSService import POSService
+from app.services.ReportsService import ReportsService
 from app.controllers.InventoryController import InventoryController
 from app.controllers.POSController import POSController
 from app.controllers.ReportsController import ReportsController
@@ -29,13 +29,12 @@ class MainWindow(QMainWindow):
         except:
             pass
 
-        # Top-level widget with header + content
         main_widget = QWidget()
         main_layout = QVBoxLayout(main_widget)
         main_layout.setContentsMargins(0, 0, 0, 0)
         main_layout.setSpacing(0)
 
-        # Header bar with username and logout
+       
         header_bar = QWidget()
         header_layout = QHBoxLayout(header_bar)
         header_layout.setContentsMargins(16, 10, 16, 10)
@@ -53,20 +52,19 @@ class MainWindow(QMainWindow):
 
         main_layout.addWidget(header_bar)
 
-        # Main container (sidebar + stack)
         container = QWidget()
         layout = QHBoxLayout(container)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
 
-        # Sidebar
+        
         self.sidebar = Sidebar()
         layout.addWidget(self.sidebar)
 
-        # Apply role-based permissions to sidebar and available pages
+       
         self.apply_role_permissions()
 
-        # Stacked widget for pages
+   
         self.stack = QStackedWidget()
         layout.addWidget(self.stack)
 
@@ -74,7 +72,7 @@ class MainWindow(QMainWindow):
 
         self.setCentralWidget(main_widget)
 
-        # Connect sidebar buttons
+ 
         self.sidebar.btn_dashboard.clicked.connect(self.load_dashboard)
         self.sidebar.btn_pos.clicked.connect(self.load_pos)
         self.sidebar.btn_inventory.clicked.connect(self.load_inventory)
@@ -82,8 +80,7 @@ class MainWindow(QMainWindow):
         self.sidebar.btn_suppliers.clicked.connect(self.load_suppliers)
         self.sidebar.btn_staff.clicked.connect(self.load_staff)
 
-        # Load default page based on role permissions
-        # Cashiers should start at POS; admins see the dashboard
+        
         try:
             if self._can_access('pos') and not self._can_access('dashboard'):
                 print(f"[MainWindow.__init__] Loading POS for user: {self.user.get('username')} (role: {self.user.get('role')})")
@@ -120,11 +117,15 @@ class MainWindow(QMainWindow):
         
         try:
             db = get_db()
-            dashboard = DashboardView(db, self.user)
-            # Create controller and keep reference to prevent GC
+            from app.services.DashboardService import DashboardService
+            from app.services.ReportsService import ReportsService
             from app.controllers.DashboardController import DashboardController
-            self.dashboard_controller = DashboardController(dashboard)
-            self.stack.addWidget(dashboard)
+            
+            dashboard_service = DashboardService(db)
+            reports_service = ReportsService(db)
+            view = DashboardView(db, self.user, reports_service)
+            self.dashboard_controller = DashboardController(dashboard_service, view)
+            self.stack.addWidget(view)
         except Exception as e:
             from PyQt6.QtWidgets import QLabel, QMessageBox
             QMessageBox.warning(self, "Database Error", 
@@ -144,9 +145,8 @@ class MainWindow(QMainWindow):
         try:
             db = get_db()
             view = POSView()
-            model = POSModel(db)
-            # Pass the authenticated user to POSController so sales are attributed
-            self.pos_controller = POSController(model, view, self.user)
+            service = POSService(db)
+            self.pos_controller = POSController(service, view, self.user)
             
             self.stack.addWidget(view)
         except Exception as e:
@@ -167,9 +167,10 @@ class MainWindow(QMainWindow):
         
         try:
             db = get_db()
-            view = InventoryView(supplier_model=SupplierModel(db))
-            model = InventoryModel(db)
-            self.inventory_controller = InventoryController(model, view, current_user=self.user)
+            supplier_service = SupplierService(db)
+            view = InventoryView(supplier_service=supplier_service)
+            service = InventoryService(db)
+            self.inventory_controller = InventoryController(service, view, self.user)
             
             self.stack.addWidget(view)
         except Exception as e:
@@ -191,8 +192,8 @@ class MainWindow(QMainWindow):
         try:
             db = get_db()
             view = ReportsView()
-            model = ReportsModel()
-            self.reports_controller = ReportsController(model, view)
+            service = ReportsService(db)
+            self.reports_controller = ReportsController(service, view)
             
             self.stack.addWidget(view)
         except Exception as e:
@@ -214,12 +215,11 @@ class MainWindow(QMainWindow):
         try:
             db = get_db()
             from app.views.SupplierView import SupplierView
-            from app.models.SupplierModel import SupplierModel
             from app.controllers.SupplierController import SupplierController
             
             view = SupplierView()
-            model = SupplierModel(db)
-            self.supplier_controller = SupplierController(model, view)
+            service = SupplierService(db)
+            self.supplier_controller = SupplierController(service, view)
             
             self.stack.addWidget(view)
         except Exception as e:
@@ -241,12 +241,12 @@ class MainWindow(QMainWindow):
         try:
             db = get_db()
             from app.views.StaffView import StaffView
-            from app.models.StaffModel import StaffModel
+            from app.services.StaffService import StaffService
             from app.controllers.StaffController import StaffController
             
             view = StaffView()
-            model = StaffModel(db)
-            self.staff_controller = StaffController(model, view)
+            service = StaffService(db)
+            self.staff_controller = StaffController(service, view)
             
             self.stack.addWidget(view)
         except Exception as e:
@@ -259,19 +259,18 @@ class MainWindow(QMainWindow):
             self.stack.addWidget(label)
 
     def apply_role_permissions(self):
-        """Enable/disable sidebar buttons based on the logged-in user's role."""
+        
         role = self.user.get('role', 'admin')
-        # Define allowed pages per role (only admin and cashier)
+        
         perms = {
-            # Admin will not see the POS on admin side
+           
             'admin': ['dashboard', 'inventory', 'reports', 'suppliers', 'staff'],
-            # Cashier should only have access to Point of Sale
+          
             'cashier': ['pos']
         }
-        # Default to cashier-like minimal access if role is unknown
+       
         allowed = perms.get(role, ['pos'])
 
-        # Show or hide buttons depending on permissions
         self.sidebar.btn_dashboard.setVisible('dashboard' in allowed)
         self.sidebar.btn_pos.setVisible('pos' in allowed)
         self.sidebar.btn_inventory.setVisible('inventory' in allowed)
@@ -289,35 +288,27 @@ class MainWindow(QMainWindow):
         return page_key in allowed
 
     def logout(self):
-        """Log out current user: close main window and return to login screen.
-        If a new login is accepted, open a fresh MainWindow for that user.
-        Otherwise quit the application."""
         try:
-            from PyQt6.QtWidgets import QApplication, QDialog
+            from PyQt6.QtWidgets import QApplication, QDialog, QMessageBox
             from app.views.LoginView import LoginView
-            from app.models.UserModel import UserModel
+            from app.services.UserService import UserService
+            from app.controllers.LoginController import LoginController
             from app.core.db import get_db
 
-            class _Auth:
-                def __init__(self, db):
-                    self.user_model = UserModel(db)
-                def login(self, username, password):
-                    return self.user_model.authenticate(username, password)
-
-            # Hide current window and show login dialog
             self.hide()
-            auth = _Auth(get_db())
-            dlg = LoginView(auth)
-            if dlg.exec() == QDialog.DialogCode.Accepted:
-                # Open a new MainWindow with the newly authenticated user
-                new_user = getattr(dlg, 'user', None)
+            db = get_db()
+            user_service = UserService(db)
+            login_view = LoginView()
+            login_controller = LoginController(user_service, login_view)
+            
+            if login_view.exec() == QDialog.DialogCode.Accepted:
+                new_user = login_view.logged_in_user
                 if new_user:
                     try:
                         print(f"[MainWindow.logout] Creating new MainWindow for user: {new_user.get('username')} (role: {new_user.get('role')})")
                         new_win = MainWindow(new_user)
                         new_win.show()
                         print("[MainWindow.logout] New MainWindow created and shown successfully")
-                        # Keep reference to prevent garbage collection
                         QApplication.instance().logout_new_window = new_win
                     except Exception as e:
                         print(f"[MainWindow.logout ERROR] Failed to create new MainWindow: {e}")
@@ -326,13 +317,13 @@ class MainWindow(QMainWindow):
                         QMessageBox.critical(self, "Error", f"Failed to open main window:\n{str(e)}")
                         self.show()
                         return
-                # Close current window instance
                 self.close()
             else:
-                # If login canceled, quit the whole application
                 QApplication.quit()
         except Exception as e:
             print(f"[MainWindow.logout ERROR] {e}")
             import traceback
+            traceback.print_exc()
+            QApplication.quit()
             traceback.print_exc()
             QMessageBox.critical(self, "Logout Error", f"An error occurred during logout: {e}")

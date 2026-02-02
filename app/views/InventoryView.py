@@ -1,12 +1,11 @@
 from PyQt6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QTableWidget,
-    QLineEdit, QLabel, QFormLayout, QTableWidgetItem, QHeaderView,
-    QMessageBox, QFrame, QComboBox, QGridLayout, QTabWidget,
-    QSpinBox, QTextEdit, QDateEdit
+    QVBoxLayout, QHBoxLayout, QPushButton, QTableWidget,
+    QLineEdit, QLabel, QTableWidgetItem, QHeaderView,
+    QFrame, QComboBox, QGridLayout, QTabWidget,
+    QSpinBox, QTextEdit, QWidget
 )
-from PyQt6.QtCore import Qt, QDate
-import re
-
+from PyQt6.QtCore import Qt
+from app.views.BaseView import BaseView
 
 class FixedPopupCombo(QComboBox):
     def showPopup(self) -> None:
@@ -78,11 +77,11 @@ class FixedPopupCombo(QComboBox):
         super().showPopup()
 
 
-class InventoryView(QWidget):
-    def __init__(self, supplier_model=None):
+class InventoryView(BaseView):
+    def __init__(self, supplier_service=None):
         super().__init__()
         self.setObjectName("content_area")
-        self.supplier_model = supplier_model
+        self.supplier_service = supplier_service
         
         layout = QVBoxLayout()
         layout.setContentsMargins(30, 30, 30, 30)
@@ -100,10 +99,10 @@ class InventoryView(QWidget):
         self.tab_widget.addTab(self._create_stock_log_tab(), "Stock Log")
 
         self.setLayout(layout)
-        print("[VIEW] InventoryView initialization complete")
+        
+        self.load_suppliers()
 
     def _create_items_tab(self):
-        """Create the original inventory items tab."""
         widget = QWidget()
         layout = QVBoxLayout(widget)
         layout.setContentsMargins(20, 20, 20, 20)
@@ -143,7 +142,7 @@ class InventoryView(QWidget):
         self.selling_price.setPlaceholderText("0.00")
         
         # Replace supplier_id input with dropdown
-        self.supplier_dropdown = QComboBox()
+        self.supplier_dropdown = FixedPopupCombo()
         self.supplier_dropdown.setPlaceholderText("Select a supplier")
 
         form_grid.addWidget(QLabel("Part Name*:"), 0, 0)
@@ -217,9 +216,18 @@ class InventoryView(QWidget):
             "Qty", "Cost", "Price", "Supplier"
         ])
         header = self.table.horizontalHeader()
+        header.setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
         header.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
         header.setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
         header.setSectionResizeMode(3, QHeaderView.ResizeMode.ResizeToContents)
+        header.setSectionResizeMode(4, QHeaderView.ResizeMode.ResizeToContents)
+        header.setSectionResizeMode(5, QHeaderView.ResizeMode.ResizeToContents)
+        header.setSectionResizeMode(6, QHeaderView.ResizeMode.ResizeToContents)
+        header.setSectionResizeMode(7, QHeaderView.ResizeMode.ResizeToContents)
+        header.setSectionResizeMode(8, QHeaderView.ResizeMode.ResizeToContents)
+        self.table.setColumnWidth(6, 150)
+        self.table.setColumnWidth(7, 150)
+        self.table.setColumnWidth(8, 120)
         self.table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self.table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self.table.setAlternatingRowColors(True)
@@ -377,25 +385,23 @@ class InventoryView(QWidget):
         def _populate(suppliers_list):
             self.supplier_dropdown.clear()
             self.supplier_dropdown.addItem("", None)
-            for row in suppliers_list:
-                if not row:
+            for supplier in suppliers_list:
+                if not supplier:
                     continue
-                supplier_id = row[0]
-                supplier_name = row[1] if len(row) > 1 else str(supplier_id)
-                self.supplier_dropdown.addItem(supplier_name, supplier_id)
+                self.supplier_dropdown.addItem(supplier.name, supplier.id)
             if len(suppliers_list) == 0:
                 self.supplier_dropdown.addItem("No suppliers available", None)
         try:
             suppliers = getattr(self, '_last_suppliers', None)
             if suppliers is None:
-                if hasattr(self, 'supplier_model') and self.supplier_model:
-                    suppliers = self.supplier_model.fetch_all()
+                if hasattr(self, 'supplier_service') and self.supplier_service:
+                    suppliers = self.supplier_service.fetch_all()
                 else:
                     return
             _populate(suppliers)
             self._last_suppliers = suppliers
-        except Exception:
-            pass
+        except Exception as e:
+            print(f"Error loading suppliers: {str(e)}")
 
     def set_suppliers(self, suppliers):
         self._last_suppliers = suppliers or []
@@ -433,34 +439,56 @@ class InventoryView(QWidget):
         
         for item in items:
             if item:
-                item_id = item[0]
-                part_name = item[1] if len(item) > 1 else str(item_id)
-                self.stock_in_item_combo.addItem(part_name, item_id)
-                self.stock_out_item_combo.addItem(part_name, item_id)
-                self.stock_log_item_filter.addItem(part_name, item_id)
+                self.stock_in_item_combo.addItem(item.part_name, item.id)
+                self.stock_out_item_combo.addItem(item.part_name, item.id)
+                self.stock_log_item_filter.addItem(item.part_name, item.id)
 
     def load_table(self, items):
         self.table.setRowCount(len(items))
         for r, item in enumerate(items):
-            for c, value in enumerate(item):
+            values = [
+                item.id,
+                item.part_name,
+                item.category,
+                item.brand,
+                item.model_number,
+                item.quantity,
+                item.cost_price,
+                item.selling_price,
+                item.supplier_name
+            ]
+            for c, value in enumerate(values):
                 if c in (6, 7):
                     try:
-                        text = f"Php {float(value):,.2f}"
+                        text = f"{float(value):.2f}"
                     except Exception:
                         text = str(value) if value is not None else ""
                     cell = QTableWidgetItem(text)
                 else:
                     cell = QTableWidgetItem(str(value) if value is not None else "")
                 cell.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+                # Store supplier_id in the supplier_name cell for later retrieval
+                if c == 8:
+                    cell.setData(Qt.ItemDataRole.UserRole, item.supplier_id)
                 self.table.setItem(r, c, cell)
         self.load_inventory_items_to_combos(items)
 
     def load_stock_log_table(self, movements):
         self.stock_log_table.setRowCount(len(movements))
         for r, movement in enumerate(movements):
-            for c, value in enumerate(movement):
+            values = [
+                movement.id,
+                movement.item_name,
+                movement.movement_type,
+                movement.quantity,
+                movement.reason,
+                movement.notes,
+                movement.movement_date,
+                movement.username
+            ]
+            for c, value in enumerate(values):
                 cell = QTableWidgetItem(str(value) if value is not None else "")
-                if c in [0, 3]:
+                if c in [0, 1, 2, 3]:
                     cell.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
                 self.stock_log_table.setItem(r, c, cell)
 
@@ -475,7 +503,6 @@ class InventoryView(QWidget):
                 quantity = self.table.item(row, 5).text() if self.table.item(row, 5) else "0"
                 cost_price = self.table.item(row, 6).text() if self.table.item(row, 6) else "0.00"
                 selling_price = self.table.item(row, 7).text() if self.table.item(row, 7) else "0.00"
-                supplier_id_text = self.table.item(row, 8).text() if self.table.item(row, 8) else "1"
                 self.part_name.setText(part_name)
                 self.category.setText(category)
                 self.brand.setText(brand)
@@ -483,13 +510,15 @@ class InventoryView(QWidget):
                 self.quantity.setText(quantity)
                 self.cost_price.setText(cost_price)
                 self.selling_price.setText(selling_price)
-                try:
-                    supplier_id = int(supplier_id_text)
-                    index = self.supplier_dropdown.findData(supplier_id)
-                    if index >= 0:
-                        self.supplier_dropdown.setCurrentIndex(index)
-                except Exception:
-                    self.supplier_dropdown.setCurrentIndex(0)
+                supplier_cell = self.table.item(row, 8)
+                if supplier_cell:
+                    supplier_id = supplier_cell.data(Qt.ItemDataRole.UserRole)
+                    if supplier_id is not None:
+                        index = self.supplier_dropdown.findData(supplier_id)
+                        if index >= 0:
+                            self.supplier_dropdown.setCurrentIndex(index)
+                    else:
+                        self.supplier_dropdown.setCurrentIndex(0)
             except Exception:
                 pass
 
@@ -532,11 +561,11 @@ class InventoryView(QWidget):
         self.quantity.clear()
         self.cost_price.clear()
         self.selling_price.clear()
-        self.supplier_dropdown.setCurrentIndex(0)  # Reset to first empty item
+        self.supplier_dropdown.setCurrentIndex(0)  
         self.table.clearSelection()
 
     def search_inventory(self, keyword):
-        """Filter inventory table by keyword (part name, category, brand)."""
+        
         if not keyword.strip():
             # Show all rows if search is empty
             for row in range(self.table.rowCount()):

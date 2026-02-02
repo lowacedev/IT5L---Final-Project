@@ -2,7 +2,6 @@ import mysql.connector
 from mysql.connector import Error
 
 def get_db():
-    """Create and return a database connection."""
     try:
         connection = mysql.connector.connect(
             host="localhost",
@@ -26,7 +25,7 @@ def get_db():
         raise e
 
 def test_connection():
-    """Test the database connection."""
+    
     try:
         db = get_db()
         cursor = db.cursor()
@@ -34,7 +33,7 @@ def test_connection():
         result = cursor.fetchone()
         print(f"Database connection test: {'SUCCESS' if result else 'FAILED'}")
         
-        # Test inventory table
+       
         cursor.execute("SELECT COUNT(*) FROM inventory_items")
         count = cursor.fetchone()[0]
         print(f"Found {count} items in inventory_items table")

@@ -1,10 +1,9 @@
-import mysql.connector
 from mysql.connector import Error
+from app.models.entities import User
+from app.exceptions import ValidationError, NotFoundError, DatabaseError
 
 
 class StaffService:
-    
-
     def __init__(self, db):
         self.db = db
 
@@ -18,34 +17,53 @@ class StaffService:
             """)
             results = cursor.fetchall()
             cursor.close()
-            print(f"[STAFF SERVICE] Fetched {len(results)} staff members: {results}")
-            return results
+            return [self._map_row_to_user(row) for row in results]
         except Error as e:
-            print(f"[STAFF SERVICE ERROR] fetch_all: {e}")
-            return []
+            raise DatabaseError(f"Failed to fetch staff: {str(e)}")
 
     def create_staff(self, full_name, username, password, role):
-        """Create a new staff member."""
+        self._validate_staff_data(full_name, username, password, role)
+        
+        if not full_name:
+            raise ValidationError("Full name is required")
+        
+        if len(password) < 4:
+            raise ValidationError("Password must be at least 4 characters")
+        
+        if role not in ["cashier", "admin"]:
+            raise ValidationError("Role must be 'cashier' or 'admin'")
+        
         try:
             cursor = self.db.cursor()
             query = """
             INSERT INTO users (full_name, username, password, role)
             VALUES (%s, %s, %s, %s)
             """
-            print(f"[STAFF SERVICE] Creating staff: {username} (role: {role}) full_name={full_name}")
             cursor.execute(query, (full_name, username, password, role))
             self.db.commit()
             staff_id = cursor.lastrowid
             cursor.close()
-            print(f"[STAFF SERVICE] Created staff with ID: {staff_id}")
-            return staff_id
+            return self.get_by_id(staff_id)
         except Error as e:
             self.db.rollback()
-            print(f"[STAFF SERVICE ERROR] create_staff: {e}")
-            raise e
+            raise DatabaseError(f"Failed to create staff: {str(e)}")
 
     def update_staff(self, staff_id, full_name, username, password, role):
-        """Update an existing staff member."""
+        self._validate_staff_data(full_name, username, password, role, allow_empty_password=True)
+        
+        if not full_name:
+            raise ValidationError("Full name is required")
+        
+        if password and len(password) < 4:
+            raise ValidationError("Password must be at least 4 characters")
+        
+        if role not in ["cashier", "admin"]:
+            raise ValidationError("Role must be 'cashier' or 'admin'")
+        
+        existing = self.get_by_id(staff_id)
+        if not existing:
+            raise NotFoundError(f"Staff member with ID {staff_id} not found")
+        
         try:
             cursor = self.db.cursor()
             if password:
@@ -63,36 +81,30 @@ class StaffService:
                 """
                 params = (full_name, username, role, staff_id)
             
-            print(f"[STAFF SERVICE] Updating staff {staff_id}")
             cursor.execute(query, params)
             self.db.commit()
-            rows_affected = cursor.rowcount
             cursor.close()
-            print(f"[STAFF SERVICE] Updated {rows_affected} row(s)")
-            return rows_affected > 0
+            return self.get_by_id(staff_id)
         except Error as e:
             self.db.rollback()
-            print(f"[STAFF SERVICE ERROR] update_staff: {e}")
-            raise e
+            raise DatabaseError(f"Failed to update staff: {str(e)}")
 
     def delete_staff(self, staff_id):
-        """Delete a staff member."""
+        existing = self.get_by_id(staff_id)
+        if not existing:
+            raise NotFoundError(f"Staff member with ID {staff_id} not found")
+        
         try:
             cursor = self.db.cursor()
-            print(f"[STAFF SERVICE] Deleting staff with ID: {staff_id}")
             cursor.execute("DELETE FROM users WHERE id=%s", (staff_id,))
             self.db.commit()
-            rows_affected = cursor.rowcount
             cursor.close()
-            print(f"[STAFF SERVICE] Deleted {rows_affected} row(s)")
-            return rows_affected > 0
+            return True
         except Error as e:
             self.db.rollback()
-            print(f"[STAFF SERVICE ERROR] delete_staff: {e}")
-            raise e
+            raise DatabaseError(f"Failed to delete staff: {str(e)}")
 
     def get_by_id(self, staff_id):
-        """Get a single staff member by ID."""
         try:
             cursor = self.db.cursor()
             cursor.execute("""
@@ -102,7 +114,24 @@ class StaffService:
             """, (staff_id,))
             result = cursor.fetchone()
             cursor.close()
-            return result
+            return self._map_row_to_user(result) if result else None
         except Error as e:
-            print(f"[STAFF SERVICE ERROR] get_by_id: {e}")
+            raise DatabaseError(f"Failed to get staff: {str(e)}")
+
+    def _validate_staff_data(self, full_name, username, password, role, allow_empty_password=False):
+        if not username or not username.strip():
+            raise ValidationError("Username is required")
+        
+        if not password and not allow_empty_password:
+            raise ValidationError("Password is required")
+
+    def _map_row_to_user(self, row):
+        if not row:
             return None
+        return User(
+            id=row[0],
+            full_name=row[1],
+            username=row[2],
+            role=row[3],
+            created_at=row[4] if len(row) > 4 else None
+        )

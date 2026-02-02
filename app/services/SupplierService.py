@@ -1,14 +1,13 @@
 from mysql.connector import Error
+from app.models.entities import Supplier
+from app.exceptions import ValidationError, NotFoundError, DatabaseError
 
 
 class SupplierService:
-    
-
     def __init__(self, db):
         self.db = db
 
     def fetch_all(self):
-        """Fetch all suppliers with full details."""
         try:
             cursor = self.db.cursor()
             cursor.execute("""
@@ -18,14 +17,11 @@ class SupplierService:
             """)
             results = cursor.fetchall()
             cursor.close()
-            print(f"[SUPPLIER SERVICE] Fetched {len(results)} suppliers: {results}")
-            return results
+            return [self._map_row_to_supplier(row) for row in results]
         except Error as e:
-            print(f"[SUPPLIER SERVICE ERROR] fetch_all: {e}")
-            return []
+            raise DatabaseError(f"Failed to fetch suppliers: {str(e)}")
 
     def get_name_by_id(self, supplier_id):
-        """Get supplier name by ID."""
         try:
             cursor = self.db.cursor()
             cursor.execute("SELECT name FROM suppliers WHERE id = %s", (supplier_id,))
@@ -33,11 +29,9 @@ class SupplierService:
             cursor.close()
             return result[0] if result else None
         except Error as e:
-            print(f"[SERVICE ERROR] get_name_by_id: {e}")
-            return None
+            raise DatabaseError(f"Failed to get supplier name: {str(e)}")
 
     def get_id_by_name(self, supplier_name):
-        """Get supplier ID by name."""
         try:
             cursor = self.db.cursor()
             cursor.execute("SELECT id FROM suppliers WHERE name = %s", (supplier_name,))
@@ -45,11 +39,12 @@ class SupplierService:
             cursor.close()
             return result[0] if result else None
         except Error as e:
-            print(f"[SERVICE ERROR] get_id_by_name: {e}")
-            return None
+            raise DatabaseError(f"Failed to get supplier ID: {str(e)}")
 
     def create_supplier(self, name, contact_person=None, email=None, phone=None, address=None):
-        """Create a new supplier."""
+        if not name or not name.strip():
+            raise ValidationError("Supplier name is required")
+        
         try:
             cursor = self.db.cursor()
             query = """
@@ -60,15 +55,19 @@ class SupplierService:
             self.db.commit()
             supplier_id = cursor.lastrowid
             cursor.close()
-            print(f"[SUPPLIER SERVICE] Created supplier with ID: {supplier_id}")
-            return supplier_id
+            return self.get_by_id(supplier_id)
         except Error as e:
             self.db.rollback()
-            print(f"[SUPPLIER SERVICE ERROR] create_supplier: {e}")
-            raise e
+            raise DatabaseError(f"Failed to create supplier: {str(e)}")
 
     def update_supplier(self, supplier_id, name, contact_person=None, email=None, phone=None, address=None):
-        """Update an existing supplier."""
+        if not name or not name.strip():
+            raise ValidationError("Supplier name is required")
+        
+        existing = self.get_by_id(supplier_id)
+        if not existing:
+            raise NotFoundError(f"Supplier with ID {supplier_id} not found")
+        
         try:
             cursor = self.db.cursor()
             query = """
@@ -78,32 +77,28 @@ class SupplierService:
             """
             cursor.execute(query, (name, contact_person, email, phone, address, supplier_id))
             self.db.commit()
-            rows_affected = cursor.rowcount
             cursor.close()
-            print(f"[SUPPLIER SERVICE] Updated {rows_affected} row(s)")
-            return rows_affected > 0
+            return self.get_by_id(supplier_id)
         except Error as e:
             self.db.rollback()
-            print(f"[SUPPLIER SERVICE ERROR] update_supplier: {e}")
-            raise e
+            raise DatabaseError(f"Failed to update supplier: {str(e)}")
 
     def delete_supplier(self, supplier_id):
-        """Delete a supplier."""
+        existing = self.get_by_id(supplier_id)
+        if not existing:
+            raise NotFoundError(f"Supplier with ID {supplier_id} not found")
+        
         try:
             cursor = self.db.cursor()
             cursor.execute("DELETE FROM suppliers WHERE id=%s", (supplier_id,))
             self.db.commit()
-            rows_affected = cursor.rowcount
             cursor.close()
-            print(f"[SUPPLIER SERVICE] Deleted {rows_affected} row(s)")
-            return rows_affected > 0
+            return True
         except Error as e:
             self.db.rollback()
-            print(f"[SUPPLIER SERVICE ERROR] delete_supplier: {e}")
-            raise e
+            raise DatabaseError(f"Failed to delete supplier: {str(e)}")
 
     def get_by_id(self, supplier_id):
-        """Get a single supplier by ID."""
         try:
             cursor = self.db.cursor()
             cursor.execute("""
@@ -113,7 +108,19 @@ class SupplierService:
             """, (supplier_id,))
             result = cursor.fetchone()
             cursor.close()
-            return result
+            return self._map_row_to_supplier(result) if result else None
         except Error as e:
-            print(f"[SUPPLIER SERVICE ERROR] get_by_id: {e}")
+            raise DatabaseError(f"Failed to get supplier: {str(e)}")
+
+    def _map_row_to_supplier(self, row):
+        if not row:
             return None
+        return Supplier(
+            id=row[0],
+            name=row[1],
+            contact_person=row[2],
+            email=row[3],
+            phone=row[4],
+            address=row[5],
+            created_at=row[6] if len(row) > 6 else None
+        )

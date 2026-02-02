@@ -31,13 +31,13 @@ class Sidebar(QWidget):
             pix = pix.scaled(160, 60, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
             logo_label.setPixmap(pix)
         else:
-            # fallback to text if logo not found
+           
             logo_label.setText("POS System")
             logo_label.setObjectName("sidebar_title")
 
         title_layout.addWidget(logo_label)
 
-        # Brand text under logo
+      
         brand_label = QLabel("TechBayan")
         brand_label.setObjectName("sidebar_brand")
         brand_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -45,7 +45,7 @@ class Sidebar(QWidget):
 
         layout.addWidget(title_widget)
 
-        # Navigation buttons
+     
         nav_widget = QWidget()
         nav_layout = QVBoxLayout(nav_widget)
         nav_layout.setContentsMargins(10, 10, 10, 10)
@@ -72,7 +72,7 @@ class Sidebar(QWidget):
         self.setLayout(layout)
 
     def set_active(self, button_name):
-        """Set the active button state."""
+       
         for btn in self.buttons:
             btn.setChecked(False)
         

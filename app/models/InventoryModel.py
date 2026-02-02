@@ -1,8 +1,10 @@
-from app.services.InventoryService import InventoryService
 
 
 class InventoryModel:
+    
     def __init__(self, db):
+        self.db = db
+        from app.services.InventoryService import InventoryService
         self._service = InventoryService(db)
 
     def fetch_all(self):
@@ -21,6 +23,7 @@ class InventoryModel:
         return self._service.get_by_id(item_id)
 
     def record_stock_movement(self, item_id, movement_type, quantity, reason, notes, user_id):
+        
         return self._service.record_stock_movement(item_id, movement_type, quantity, reason, notes, user_id)
 
     def get_stock_movements(self, item_id=None, limit=100):

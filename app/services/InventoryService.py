@@ -1,9 +1,9 @@
 from mysql.connector import Error
+from app.models.entities import InventoryItem, StockMovement
+from app.exceptions import ValidationError, NotFoundError, DatabaseError
 
 
 class InventoryService:
-   
-
     def __init__(self, db):
         self.db = db
 
@@ -13,107 +13,158 @@ class InventoryService:
             cursor = self.db.cursor()
             cursor.execute("""
                 SELECT ii.id, ii.part_name, ii.category, ii.brand, ii.model_number, 
-                       ii.quantity, ii.cost_price, ii.selling_price, COALESCE(s.name, 'N/A')
+                       ii.quantity, ii.cost_price, ii.selling_price, ii.supplier_id,
+                       COALESCE(s.name, 'N/A') as supplier_name
                 FROM inventory_items ii
                 LEFT JOIN suppliers s ON ii.supplier_id = s.id
                 ORDER BY ii.part_name
             """)
-            return cursor.fetchall()
-        except Error:
-            raise
+            results = cursor.fetchall()
+            return [self._map_row_to_item(row) for row in results]
+        except Error as e:
+            raise DatabaseError(f"Failed to fetch inventory: {str(e)}")
         finally:
             if cursor:
                 cursor.close()
 
-    def create_item(self, data):
+    def create_item(self, part_name, category, brand, model_number, quantity, cost_price, selling_price, supplier_id):
+        if not part_name or not part_name.strip():
+            raise ValidationError("Part name is required")
+        
+        try:
+            quantity = int(quantity)
+            cost_price = float(cost_price)
+            selling_price = float(selling_price)
+        except (ValueError, TypeError):
+            raise ValidationError("Invalid quantity or price values")
+        
+        if cost_price < 0 or selling_price < 0:
+            raise ValidationError("Prices cannot be negative")
+        
+        if quantity < 0:
+            raise ValidationError("Quantity cannot be negative")
+        
+        if selling_price < cost_price:
+            raise ValidationError("Selling price cannot be below cost price")
+        
         cursor = None
         try:
-            try:
-                cost_price = float(data[5])
-                selling_price = float(data[6])
-                if selling_price < cost_price:
-                    raise ValueError("Selling price cannot be below cost price")
-            except (ValueError, TypeError) as e:
-                raise
             cursor = self.db.cursor()
             cursor.execute("""
                 INSERT INTO inventory_items 
                 (part_name, category, brand, model_number, quantity, 
                  cost_price, selling_price, supplier_id)
                 VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-            """, data)
+            """, (part_name, category, brand, model_number, quantity, cost_price, selling_price, supplier_id))
             self.db.commit()
-            return cursor.lastrowid
-        except Error:
-            if self.db:
-                self.db.rollback()
-            raise
+            item_id = cursor.lastrowid
+            return self.get_by_id(item_id)
+        except Error as e:
+            self.db.rollback()
+            raise DatabaseError(f"Failed to create item: {str(e)}")
         finally:
             if cursor:
                 cursor.close()
 
-    def update_item(self, item_id, data):
+    def update_item(self, item_id, part_name, category, brand, model_number, quantity, cost_price, selling_price, supplier_id):
+        if not part_name or not part_name.strip():
+            raise ValidationError("Part name is required")
+        
+        try:
+            quantity = int(quantity)
+            cost_price = float(cost_price)
+            selling_price = float(selling_price)
+        except (ValueError, TypeError):
+            raise ValidationError("Invalid quantity or price values")
+        
+        if cost_price < 0 or selling_price < 0:
+            raise ValidationError("Prices cannot be negative")
+        
+        if quantity < 0:
+            raise ValidationError("Quantity cannot be negative")
+        
+        if selling_price < cost_price:
+            raise ValidationError("Selling price cannot be below cost price")
+        
+        existing = self.get_by_id(item_id)
+        if not existing:
+            raise NotFoundError(f"Item with ID {item_id} not found")
+        
         cursor = None
         try:
-            try:
-                cost_price = float(data[5])
-                selling_price = float(data[6])
-                if selling_price < cost_price:
-                    raise ValueError("Selling price cannot be below cost price")
-            except (ValueError, TypeError):
-                raise
             cursor = self.db.cursor()
             cursor.execute("""
                 UPDATE inventory_items SET 
                     part_name=%s, category=%s, brand=%s, model_number=%s,
                     quantity=%s, cost_price=%s, selling_price=%s, supplier_id=%s
                 WHERE id=%s
-            """, data + (item_id,))
+            """, (part_name, category, brand, model_number, quantity, cost_price, selling_price, supplier_id, item_id))
             self.db.commit()
-            return cursor.rowcount > 0
-        except Error:
-            if self.db:
-                self.db.rollback()
-            raise
+            return self.get_by_id(item_id)
+        except Error as e:
+            self.db.rollback()
+            raise DatabaseError(f"Failed to update item: {str(e)}")
         finally:
             if cursor:
                 cursor.close()
 
     def delete_item(self, item_id):
+        existing = self.get_by_id(item_id)
+        if not existing:
+            raise NotFoundError(f"Item with ID {item_id} not found")
+        
         cursor = None
         try:
             cursor = self.db.cursor()
             cursor.execute("DELETE FROM inventory_items WHERE id=%s", (item_id,))
             self.db.commit()
-            return cursor.rowcount > 0
-        except Error:
-            if self.db:
-                self.db.rollback()
-            raise
+            return True
+        except Error as e:
+            self.db.rollback()
+            raise DatabaseError(f"Failed to delete item: {str(e)}")
         finally:
             if cursor:
                 cursor.close()
+
+
+
+
+
+
+
+
 
     def get_by_id(self, item_id):
         cursor = None
         try:
             cursor = self.db.cursor()
             cursor.execute("""
-                SELECT id, part_name, category, brand, model_number, 
-                       quantity, cost_price, selling_price, supplier_id
-                FROM inventory_items
-                WHERE id=%s
+                SELECT ii.id, ii.part_name, ii.category, ii.brand, ii.model_number, 
+                       ii.quantity, ii.cost_price, ii.selling_price, ii.supplier_id,
+                       COALESCE(s.name, 'N/A') as supplier_name
+                FROM inventory_items ii
+                LEFT JOIN suppliers s ON ii.supplier_id = s.id
+                WHERE ii.id=%s
             """, (item_id,))
-            return cursor.fetchone()
-        except Error:
-            raise
+            result = cursor.fetchone()
+            return self._map_row_to_item(result) if result else None
+        except Error as e:
+            raise DatabaseError(f"Failed to get item: {str(e)}")
         finally:
             if cursor:
                 cursor.close()
 
-    def record_stock_movement(self, item_id, movement_type, quantity, reason, notes, user_id):
+    def record_stock_movement(self, item_id, movement_type, quantity, reason, notes, user_id=None):
         if movement_type not in ("IN", "OUT", "ADJUSTMENT"):
-            raise ValueError("Invalid movement type")
+            raise ValidationError("Invalid movement type")
+        
+        try:
+            quantity = int(quantity)
+        except (ValueError, TypeError):
+            raise ValidationError("Invalid quantity")
+        
+        if quantity <= 0 and movement_type != "ADJUSTMENT":
+            raise ValidationError("Quantity must be positive")
 
         cursor = None
         try:
@@ -122,7 +173,7 @@ class InventoryService:
             cursor.execute("SELECT quantity FROM inventory_items WHERE id=%s", (item_id,))
             result = cursor.fetchone()
             if not result:
-                raise ValueError("Item not found")
+                raise NotFoundError(f"Item with ID {item_id} not found")
 
             current_qty = result[0]
 
@@ -131,7 +182,7 @@ class InventoryService:
             elif movement_type == "OUT":
                 new_qty = current_qty - quantity
                 if new_qty < 0:
-                    raise ValueError("Insufficient stock")
+                    raise ValidationError(f"Insufficient stock. Available: {current_qty}, Requested: {quantity}")
             else:
                 new_qty = quantity
 
@@ -150,12 +201,11 @@ class InventoryService:
 
             self.db.commit()
             return movement_id
-        except ValueError:
+        except (ValidationError, NotFoundError):
             raise
-        except Error:
-            if self.db:
-                self.db.rollback()
-            raise
+        except Error as e:
+            self.db.rollback()
+            raise DatabaseError(f"Failed to record stock movement: {str(e)}")
         finally:
             if cursor:
                 cursor.close()
@@ -166,7 +216,7 @@ class InventoryService:
             cursor = self.db.cursor()
             if item_id:
                 cursor.execute("""
-                    SELECT sm.id, ii.part_name, sm.movement_type, sm.quantity, sm.reason, 
+                    SELECT sm.id, sm.item_id, ii.part_name, sm.movement_type, sm.quantity, sm.reason, 
                            sm.notes, sm.movement_date, COALESCE(u.full_name, u.username, 'System')
                     FROM stock_movements sm
                     JOIN inventory_items ii ON sm.item_id = ii.id
@@ -177,7 +227,7 @@ class InventoryService:
                 """, (item_id, limit))
             else:
                 cursor.execute("""
-                    SELECT sm.id, ii.part_name, sm.movement_type, sm.quantity, sm.reason, 
+                    SELECT sm.id, sm.item_id, ii.part_name, sm.movement_type, sm.quantity, sm.reason, 
                            sm.notes, sm.movement_date, COALESCE(u.full_name, u.username, 'System')
                     FROM stock_movements sm
                     JOIN inventory_items ii ON sm.item_id = ii.id
@@ -185,9 +235,41 @@ class InventoryService:
                     ORDER BY sm.movement_date DESC
                     LIMIT %s
                 """, (limit,))
-            return cursor.fetchall()
-        except Error:
-            raise
+            results = cursor.fetchall()
+            return [self._map_row_to_movement(row) for row in results]
+        except Error as e:
+            raise DatabaseError(f"Failed to get stock movements: {str(e)}")
         finally:
             if cursor:
                 cursor.close()
+
+    def _map_row_to_item(self, row):
+        if not row:
+            return None
+        return InventoryItem(
+            id=row[0],
+            part_name=row[1],
+            category=row[2],
+            brand=row[3],
+            model_number=row[4],
+            quantity=row[5],
+            cost_price=row[6],
+            selling_price=row[7],
+            supplier_id=row[8],
+            supplier_name=row[9] if len(row) > 9 else ""
+        )
+
+    def _map_row_to_movement(self, row):
+        if not row:
+            return None
+        return StockMovement(
+            id=row[0],
+            item_id=row[1],
+            item_name=row[2],
+            movement_type=row[3],
+            quantity=row[4],
+            reason=row[5],
+            notes=row[6],
+            movement_date=row[7],
+            username=row[8]
+        )

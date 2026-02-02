@@ -1,14 +1,14 @@
 from PyQt6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QTableWidget,
-    QLineEdit, QLabel, QFormLayout, QTableWidgetItem, QHeaderView,
-    QMessageBox, QFrame, QGridLayout
+    QVBoxLayout, QHBoxLayout, QPushButton, QTableWidget,
+    QLineEdit, QLabel, QTableWidgetItem, QHeaderView,
+    QFrame, QGridLayout
 )
 from PyQt6.QtCore import Qt
+from app.views.BaseView import BaseView
 
-class SupplierView(QWidget):
+class SupplierView(BaseView):
     def __init__(self):
         super().__init__()
-        print("[SUPPLIER VIEW] Initializing SupplierView...")
         self.setObjectName("content_area")
         
         layout = QVBoxLayout()
@@ -126,16 +126,12 @@ class SupplierView(QWidget):
         
         layout.addWidget(self.table)
         self.setLayout(layout)
-        
-        print("[SUPPLIER VIEW] SupplierView initialization complete")
 
     def on_row_selected(self, index):
-        """Handle row selection and populate form."""
         row = self.table.currentRow()
         if row < 0:
             return
         
-        # Get data from table columns
         supplier_id = self.table.item(row, 0).text()
         name = self.table.item(row, 1).text()
         contact = self.table.item(row, 2).text()
@@ -143,59 +139,49 @@ class SupplierView(QWidget):
         phone = self.table.item(row, 4).text()
         address = self.table.item(row, 5).text()
         
-        # Populate form fields
         self.name.setText(name)
         self.contact_person.setText(contact)
         self.email.setText(email)
         self.phone.setText(phone)
         self.address.setText(address)
-        
-        print(f"[SUPPLIER VIEW] Populated form with supplier ID: {supplier_id}")
 
     def load_table(self, items):
-        """Load suppliers into the table."""
-        print(f"[SUPPLIER VIEW] Loading {len(items)} suppliers into table")
         self.table.setRowCount(len(items))
         
         for r, item in enumerate(items):
-            for c in range(min(6, len(item))):
-                value = item[c] if c < len(item) else ""
-                cell = QTableWidgetItem(str(value))
-                cell.setTextAlignment(Qt.AlignmentFlag.AlignLeft)
+            values = [item.id, item.name, item.contact_person, item.email, item.phone, item.address]
+            for c, value in enumerate(values):
+                cell = QTableWidgetItem(str(value) if value else "")
+          
+                if c in [0, 1]:
+                    cell.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+                else:
+                    cell.setTextAlignment(Qt.AlignmentFlag.AlignLeft)
                 self.table.setItem(r, c, cell)
 
-    def get_form_data(self, with_id=False):
-        """Get form data."""
+    def collect_form_data(self, with_id=False):
         name = self.name.text().strip()
         contact_person = self.contact_person.text().strip()
         email = self.email.text().strip()
         phone = self.phone.text().strip()
         address = self.address.text().strip()
         
-        if not name:
-            QMessageBox.warning(self, "Validation", "Supplier name is required.")
-            return None
-        
         if with_id:
             selected_row = self.table.currentRow()
             if selected_row < 0:
-                QMessageBox.warning(self, "No Selection", "Please select a supplier to update.")
                 return None
-            
             supplier_id = int(self.table.item(selected_row, 0).text())
             return (supplier_id, name, contact_person, email, phone, address)
         
         return (name, contact_person, email, phone, address)
 
     def get_selected_id(self):
-        """Get ID of selected row."""
         row = self.table.currentRow()
         if row < 0:
             return None
         return int(self.table.item(row, 0).text())
 
     def clear_form(self):
-        """Clear the form."""
         self.name.clear()
         self.contact_person.clear()
         self.email.clear()

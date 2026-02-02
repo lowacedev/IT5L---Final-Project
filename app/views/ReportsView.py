@@ -1,23 +1,18 @@
 from PyQt6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QTabWidget, QTableWidget, QTableWidgetItem,
-    QPushButton, QDateEdit, QLabel, QComboBox, QSpinBox, QMessageBox, QFileDialog, QHeaderView
+    QVBoxLayout, QHBoxLayout, QTabWidget, QTableWidget, QTableWidgetItem,
+    QPushButton, QDateEdit, QLabel, QComboBox, QSpinBox, QFileDialog, QHeaderView,
+    QWidget, QMessageBox
 )
 from PyQt6.QtCore import QDate, Qt
 from datetime import datetime, timedelta
 import csv
 from reportlab.lib.pagesizes import letter, landscape
-from reportlab.platypus import (
-    SimpleDocTemplate,
-    Table as RLTable,
-    TableStyle,
-    Paragraph,
-    Spacer,
-    Image as RLImage,
-    PageBreak,
-)
+from reportlab.platypus import SimpleDocTemplate, Table as RLTable, TableStyle, Paragraph, Spacer, Image as RLImage, PageBreak
 from reportlab.lib import colors
 from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.lib.units import inch
+from app.views.BaseView import BaseView
+from app.utils.ProfessionalPDFReportGenerator import ProfessionalPDFReportGenerator
 try:
     import openpyxl
     from openpyxl.utils import get_column_letter
@@ -27,43 +22,39 @@ try:
 except Exception:
     OPENPYXL_AVAILABLE = False
 
-class ReportsView(QWidget):
+class ReportsView(BaseView):
     def __init__(self):
         super().__init__()
         self.init_ui()
 
     def init_ui(self):
-        """Initialize the UI."""
         layout = QVBoxLayout()
         
-        # Create tab widget
+        
         self.tab_widget = QTabWidget()
         
-        # Tab 1: Sales Report
+        
         self.tab_widget.addTab(self.create_sales_tab(), "Sales Report")
         
-        # Tab 2: Top Selling Items
+    
         self.tab_widget.addTab(self.create_top_items_tab(), "Top Selling Items")
         
-        # Tab 3: Inventory Status
+        
         self.tab_widget.addTab(self.create_inventory_tab(), "Inventory Status")
         
-        # Tab 4: Low Stock Alert
+        
         self.tab_widget.addTab(self.create_low_stock_tab(), "Low Stock Alert")
         
-        # Tab 5: Supplier Performance
+
         self.tab_widget.addTab(self.create_supplier_tab(), "Supplier Performance")
         
-        # Tab 6: Category Performance
         self.tab_widget.addTab(self.create_category_tab(), "Category Performance")
         
         layout.addWidget(self.tab_widget)
         self.setLayout(layout)
-        # wire export button signals
         self.connect_export_buttons()
 
     def create_sales_tab(self):
-        """Create sales report tab."""
         widget = QWidget()
         layout = QVBoxLayout()
         
@@ -340,27 +331,16 @@ class ReportsView(QWidget):
             self.category_table.setItem(row, 3, QTableWidgetItem(f"Php {item[3]:,.2f}" if item[3] else "Php 0.00"))
             self.category_table.setItem(row, 4, QTableWidgetItem(f"Php {item[4]:,.2f}" if item[4] else "Php 0.00"))
 
-    def _export_table_widget_to_pdf(self, table_widget, filename, title=None):
+    def _export_table_widget_to_pdf(self, table_widget, filename, title=None, filters=None, metrics=None):
+        """Export a table widget to PDF with professional formatting."""
         try:
-            styles = getSampleStyleSheet()
-
-            # Prepare document
-            doc = SimpleDocTemplate(
-                filename,
-                pagesize=landscape(letter),
-                rightMargin=36,
-                leftMargin=36,
-                topMargin=72,
-                bottomMargin=36,
-            )
-
-            elements = []
-
-            # Optional title block
-            if title:
-                elements.append(Paragraph(title, styles['Heading2']))
-                elements.append(Spacer(1, 6))
-
+            # Create professional report generator
+            report = ProfessionalPDFReportGenerator(filename, landscape_mode=True)
+            
+            # Add header and metadata
+            report.add_header()
+            report.add_title_and_metadata(title or "Report", filters=filters, metrics=metrics)
+            
             # Build data rows
             headers = [
                 table_widget.horizontalHeaderItem(c).text()
@@ -369,108 +349,23 @@ class ReportsView(QWidget):
                 for c in range(table_widget.columnCount())
             ]
 
-            data = [headers]
-
-            # Track max text width per column (approx chars)
-            col_max_chars = [len(h) for h in headers]
-
+            data = []
             for r in range(table_widget.rowCount()):
                 row = []
                 for c in range(table_widget.columnCount()):
                     item = table_widget.item(r, c)
                     text = item.text() if item else ""
-                    row.append(text)
-                    if len(text) > col_max_chars[c]:
-                        col_max_chars[c] = len(text)
+                    row.append(Paragraph(text, getSampleStyleSheet()['Normal']))
                 data.append(row)
-
-            # Estimate column widths based on character counts and available page width
-            page_width = landscape(letter)[0] - doc.leftMargin - doc.rightMargin
-            # assign relative weights clipped
-            total_chars = sum(max(1, v) for v in col_max_chars)
-            col_widths = [max(50, (v / total_chars) * page_width) for v in col_max_chars]
-
-            # Create table with repeatRows for header and allow splitting across pages
-            rl_table = RLTable(data, colWidths=col_widths, repeatRows=1)
-
-            # Table styling: header row, alternate backgrounds, padding, alignment
-            tbl_style = TableStyle([
-                ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#f5f7fa')),
-                ('TEXTCOLOR', (0, 0), (-1, 0), colors.HexColor('#0b2e4a')),
-                ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
-                ('GRID', (0, 0), (-1, -1), 0.25, colors.HexColor('#c8d0d8')),
-                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-                ('FONTSIZE', (0, 0), (-1, -1), 9),
-                ('BOTTOMPADDING', (0, 0), (-1, 0), 8),
-                ('TOPPADDING', (0, 0), (-1, 0), 8),
-            ])
-
-            # Alternate row background
-            for i in range(1, len(data)):
-                if i % 2 == 0:
-                    tbl_style.add('BACKGROUND', (0, i), (-1, i), colors.HexColor('#fcfdff'))
-
-            # Right-align numeric-looking columns (heuristic)
-            for col_idx in range(len(headers)):
-                # check a few rows to decide if numeric
-                numeric_count = 0
-                for r in range(1, min(10, len(data))):
-                    try:
-                        float(str(data[r][col_idx]).replace('Php', '').replace(',', '').strip())
-                        numeric_count += 1
-                    except Exception:
-                        pass
-                if numeric_count >= max(1, (len(data) - 1) // 2):
-                    tbl_style.add('ALIGN', (col_idx, 1), (col_idx, -1), 'RIGHT')
-
-            rl_table.setStyle(tbl_style)
-
-            elements.append(rl_table)
-
-            # Header/footer drawing functions
-            logo_path = None
-            try:
-                # try to use embedded logo if available
-                import os
-                logo_candidate = os.path.join(os.path.dirname(__file__), '..', 'assets', 'images', 'techbayanlogo.jpg')
-                logo_candidate = os.path.normpath(logo_candidate)
-                if os.path.exists(logo_candidate):
-                    logo_path = logo_candidate
-            except Exception:
-                logo_path = None
-
-            def _header(canvas, doc_obj):
-                canvas.saveState()
-                width, height = doc_obj.pagesize
-                # Draw logo at left
-                if logo_path:
-                    try:
-                        img_w = 1.0 * inch
-                        img_h = 0.35 * inch
-                        canvas.drawImage(logo_path, doc_obj.leftMargin, height - 50, width=img_w, height=img_h, preserveAspectRatio=True, mask='auto')
-                    except Exception:
-                        pass
-                # Title centered
-                canvas.setFont('Helvetica-Bold', 12)
-                canvas.drawCentredString(width / 2.0, height - 36, title if title else '')
-                # Date at right
-                canvas.setFont('Helvetica', 8)
-                canvas.drawRightString(width - doc_obj.rightMargin, height - 34, datetime.now().strftime('%Y-%m-%d %H:%M'))
-                canvas.restoreState()
-
-            def _footer(canvas, doc_obj):
-                canvas.saveState()
-                width, height = doc_obj.pagesize
-                canvas.setFont('Helvetica', 8)
-                footer_text = f"Generated by POS System"
-                canvas.drawString(doc_obj.leftMargin, doc_obj.bottomMargin - 18, footer_text)
-                # page number
-                page_num = canvas.getPageNumber()
-                canvas.drawRightString(width - doc_obj.rightMargin, doc_obj.bottomMargin - 18, f"Page {page_num}")
-                canvas.restoreState()
-
-            # Build document with header/footer callbacks
-            doc.build(elements, onFirstPage=lambda c, d: (_header(c, d), _footer(c, d)), onLaterPages=lambda c, d: (_header(c, d), _footer(c, d)))
+            
+            # Add data table
+            report.add_data_table(None, headers, data)
+            
+            # Add footer note
+            report.add_footer_note("This is a confidential business report. Protect accordingly.")
+            
+            # Build PDF
+            report.build()
             QMessageBox.information(self, "Success", f"Exported PDF to {filename}")
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Failed to export PDF: {str(e)}")
@@ -498,23 +393,110 @@ class ReportsView(QWidget):
         filename = self._choose_save_file("sales_report.pdf")
         if not filename:
             return
-        # Merge both tables into a single PDF by exporting the detailed transactions table
-        title = "Sales Detailed Transactions"
-        self._export_table_widget_to_pdf(self.sales_detail_table, filename, title=title)
+        # Get date range for filters
+        start_date = self.sales_start_date.date().toString("yyyy-MM-dd")
+        end_date = self.sales_end_date.date().toString("yyyy-MM-dd")
+        
+        filters = {
+            "Date Range": f"{start_date} to {end_date}",
+            "Report Type": "Detailed Transactions"
+        }
+        
+        # Calculate metrics from sales summary table
+        total_revenue = 0.0
+        total_transactions = 0
+        
+        for r in range(self.sales_by_date_table.rowCount()):
+            try:
+                transactions_item = self.sales_by_date_table.item(r, 1)
+                revenue_item = self.sales_by_date_table.item(r, 2)
+                if transactions_item:
+                    total_transactions += int(transactions_item.text())
+                if revenue_item:
+                    revenue_text = revenue_item.text().replace('Php ', '').replace(',', '')
+                    total_revenue += float(revenue_text)
+            except Exception:
+                pass
+        
+        metrics = {
+            "Total Records": str(self.sales_detail_table.rowCount()),
+            "Total Revenue": f"Php {total_revenue:,.2f}",
+            "Total Transactions": str(total_transactions),
+        }
+        
+        title = "Sales Detailed Transactions Report"
+        self._export_table_widget_to_pdf(self.sales_detail_table, filename, title=title, filters=filters, metrics=metrics)
 
     def _handle_export_top_items_pdf(self):
         filename = self._choose_save_file("top_items_report.pdf")
         if not filename:
             return
-        title = "Top Selling Items"
-        self._export_table_widget_to_pdf(self.top_items_table, filename, title=title)
+        
+        limit = self.top_items_limit.value()
+        filters = {
+            "Top Items Limit": str(limit)
+        }
+        
+        # Calculate metrics from top items table
+        total_qty = 0
+        total_revenue = 0.0
+        
+        for r in range(self.top_items_table.rowCount()):
+            try:
+                qty_item = self.top_items_table.item(r, 3)
+                revenue_item = self.top_items_table.item(r, 4)
+                if qty_item:
+                    total_qty += int(qty_item.text())
+                if revenue_item:
+                    revenue_text = revenue_item.text().replace('Php ', '').replace(',', '')
+                    total_revenue += float(revenue_text)
+            except Exception:
+                pass
+        
+        metrics = {
+            "Items Shown": str(self.top_items_table.rowCount()),
+            "Total Quantity": str(total_qty),
+            "Total Revenue": f"Php {total_revenue:,.2f}",
+        }
+        
+        title = "Top Selling Items Report"
+        self._export_table_widget_to_pdf(self.top_items_table, filename, title=title, filters=filters, metrics=metrics)
 
     def _handle_export_inventory_pdf(self):
         filename = self._choose_save_file("inventory_report.pdf")
         if not filename:
             return
-        title = "Inventory Status"
-        self._export_table_widget_to_pdf(self.inventory_table, filename, title=title)
+        
+        # Calculate metrics from inventory table
+        total_quantity = 0
+        total_cost_value = 0.0
+        total_selling_value = 0.0
+        
+        for r in range(self.inventory_table.rowCount()):
+            try:
+                qty_item = self.inventory_table.item(r, 3)
+                cost_item = self.inventory_table.item(r, 6)
+                selling_item = self.inventory_table.item(r, 7)
+                
+                if qty_item:
+                    total_quantity += int(qty_item.text())
+                if cost_item:
+                    cost_text = cost_item.text().replace('Php ', '').replace(',', '')
+                    total_cost_value += float(cost_text)
+                if selling_item:
+                    selling_text = selling_item.text().replace('Php ', '').replace(',', '')
+                    total_selling_value += float(selling_text)
+            except Exception:
+                pass
+        
+        metrics = {
+            "Total Items": str(self.inventory_table.rowCount()),
+            "Total Quantity": str(total_quantity),
+            "Total Inventory Value": f"Php {total_selling_value:,.2f}",
+        }
+        
+        title = "Inventory Status Report"
+        self._export_table_widget_to_pdf(self.inventory_table, filename, title=title, metrics=metrics)
 
     def export_to_csv(self, data, filename):
         """Export data to CSV file."""

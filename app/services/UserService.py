@@ -5,7 +5,7 @@ class UserService:
 
     def authenticate(self, username, password):
         try:
-            query = "SELECT id, username, role FROM users WHERE username=%s AND password=%s"
+            query = "SELECT id, username, full_name, role FROM users WHERE username=%s AND password=%s"
             self.cursor.execute(query, (username, password))
             result = self.cursor.fetchone()
             
@@ -13,7 +13,8 @@ class UserService:
                 return {
                     'id': result[0],
                     'username': result[1],
-                    'role': result[2]
+                    'full_name': result[2],
+                    'role': result[3]
                 }
             return None
             

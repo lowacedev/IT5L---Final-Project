@@ -11,7 +11,7 @@ class CheckoutReceiptDialog(QDialog):
         super().__init__(parent)
         self.items = items
         self.subtotal = subtotal
-        self.vat_amount = subtotal * 0.12  # 12% VAT
+        self.vat_amount = subtotal * 0.12  
         self.total = subtotal + self.vat_amount
         self.cashier_name = cashier_name
         

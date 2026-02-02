@@ -20,17 +20,9 @@ from PyQt6.QtWidgets import QApplication
 QGuiApplication.setAttribute(Qt.ApplicationAttribute.AA_ShareOpenGLContexts)
 from app.views.MainWindow import MainWindow
 from app.views.LoginView import LoginView
-from app.models.UserModel import UserModel
+from app.services.UserService import UserService
+from app.controllers.LoginController import LoginController
 from app.core.db import get_db
-
-class AuthController:
-    """Simple authentication controller."""
-    def __init__(self, db):
-        self.user_model = UserModel(db)
-    
-    def login(self, username, password):
-        """Authenticate user."""
-        return self.user_model.authenticate(username, password)
 
 def main():
     app = QApplication(sys.argv)
@@ -40,12 +32,12 @@ def main():
     try:
         db = get_db()
         
-     
-        auth_controller = AuthController(db)
-        login_dialog = LoginView(auth_controller)
+        user_service = UserService(db)
+        login_view = LoginView()
+        login_controller = LoginController(user_service, login_view)
         
-        if login_dialog.exec() == LoginView.DialogCode.Accepted:
-            user = login_dialog.user
+        if login_view.exec() == LoginView.DialogCode.Accepted:
+            user = login_view.logged_in_user
             
   
             window = MainWindow(user)
@@ -63,4 +55,4 @@ def main():
         sys.exit(app.exec())
 
 if __name__ == "__main__":
-    main() 
+    main()

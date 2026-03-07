@@ -61,6 +61,8 @@ class LoginController:
                 SecurityConfig.MAX_LOGIN_ATTEMPTS,
                 lockout_minutes
             ):
+                locked_logger = logging.getLogger('ACCOUNT_LOCKED')
+                locked_logger.warning(f"Blocked login attempt for locked account: {username}")
                 self.logger.warning(f"Blocked login attempt for locked account: {username}")
                 self.view.show_error(f"Account locked due to too many failed attempts. Try again in {lockout_minutes} minutes.")
                 self.generate_new_captcha()
@@ -68,6 +70,8 @@ class LoginController:
             
             # Validate CAPTCHA
             if not self.captcha_generator.validate(captcha_input):
+                captcha_logger = logging.getLogger('CAPTCHA_FAILED')
+                captcha_logger.warning(f"Failed CAPTCHA attempt for username: {username}")
                 self.logger.warning(f"Failed CAPTCHA attempt for username: {username}")
                 # Record CAPTCHA failure as login attempt
                 self.service.login_tracker.record_attempt(username, False, reason="Invalid CAPTCHA")
@@ -80,10 +84,14 @@ class LoginController:
             user = self.service.authenticate(username, password)
 
             if user:
+                auth_logger = logging.getLogger('AUTH')
+                auth_logger.info(f"Login attempt [SUCCESS] - Username: {username}")
                 self.logger.info(f"Successful login for user: {username}")
                 self.view.accept()
                 self.view.logged_in_user = user
             else:
+                auth_logger = logging.getLogger('AUTH')
+                auth_logger.error(f"Login attempt [FAILED] - Username: {username} - Reason: Invalid password")
                 self.logger.warning(f"Failed login attempt for username: {username}")
                 self.view.show_error("Invalid username or password.")
                 # Regenerate CAPTCHA for next attempt

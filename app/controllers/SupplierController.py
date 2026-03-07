@@ -2,9 +2,10 @@ from app.exceptions import ValidationError, NotFoundError, DatabaseError
 
 
 class SupplierController:
-    def __init__(self, service, view):
+    def __init__(self, service, view, current_user=None):
         self.service = service
         self.view = view
+        self.current_user = current_user
 
         view.add_btn.clicked.connect(self.add_supplier)
         view.update_btn.clicked.connect(self.update_supplier)
@@ -77,7 +78,8 @@ class SupplierController:
             return
         
         try:
-            self.service.create_supplier(name, contact_person, email, phone, address)
+            performed_by = self.current_user.get('username') if self.current_user else None
+            self.service.create_supplier(name, contact_person, email, phone, address, performed_by=performed_by)
             self.view.show_success("Supplier added successfully!")
             self.view.clear_form()
             self.load_data()
@@ -148,7 +150,8 @@ class SupplierController:
             return
         
         try:
-            self.service.update_supplier(supplier_id, name, contact_person, email, phone, address)
+            performed_by = self.current_user.get('username') if self.current_user else None
+            self.service.update_supplier(supplier_id, name, contact_person, email, phone, address, performed_by=performed_by)
             self.view.show_success("Supplier updated successfully!")
             self.view.clear_form()
             self.load_data()
@@ -171,7 +174,8 @@ class SupplierController:
             return
         
         try:
-            self.service.delete_supplier(supplier_id)
+            performed_by = self.current_user.get('username') if self.current_user else None
+            self.service.delete_supplier(supplier_id, performed_by=performed_by)
             self.view.show_success("Supplier deleted successfully!")
             self.view.clear_form()
             self.load_data()

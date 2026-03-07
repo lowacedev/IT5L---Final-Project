@@ -115,8 +115,7 @@ class InventoryController:
             return
 
         try:
-            self.service.create_item(part_name, category, brand, model_number, quantity, cost_price, selling_price, supplier_id)
-            self.logger.info(f"Inventory item created by {self.user.get('username') if self.user else 'unknown'}: {part_name}")
+            self.service.create_item(part_name, category, brand, model_number, quantity, cost_price, selling_price, supplier_id, performed_by=self.user.get('username') if self.user else None)
             self.view.show_success("Item added successfully!")
             self.view.clear_form()
             self.refresh_inventory()
@@ -195,8 +194,7 @@ class InventoryController:
             return
 
         try:
-            self.service.update_item(item_id, part_name, category, brand, model_number, quantity, cost_price, selling_price, supplier_id)
-            self.logger.info(f"Inventory item updated by {self.user.get('username') if self.user else 'unknown'}: {part_name}")
+            self.service.update_item(item_id, part_name, category, brand, model_number, quantity, cost_price, selling_price, supplier_id, performed_by=self.user.get('username') if self.user else None)
             self.view.show_success("Item updated successfully!")
             self.view.clear_form()
             self.refresh_inventory()

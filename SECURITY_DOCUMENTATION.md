@@ -159,7 +159,6 @@ is_correct = PasswordManager.verify_password(entered_password, stored_hash)
 - 2 roles implemented (Admin, Cashier)
 - Menu access controlled by role
 - Database operations respect role permissions
-- All test cases passing (18/18)
 
 ---
 

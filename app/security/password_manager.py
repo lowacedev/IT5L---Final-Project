@@ -47,7 +47,7 @@ class PasswordManager:
             # Log locally to avoid circular imports
             try:
                 from app.utils.logger import get_logger
-                logger = get_logger(__name__)
+                logger = get_logger('PASSWORD_CHANGE')
                 logger.error(f"Password verification error: {e}")
             except:
                 pass

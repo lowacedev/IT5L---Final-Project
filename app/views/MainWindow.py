@@ -218,7 +218,7 @@ class MainWindow(QMainWindow):
             
             view = SupplierView()
             service = SupplierService(db)
-            self.supplier_controller = SupplierController(service, view)
+            self.supplier_controller = SupplierController(service, view, current_user=self.user)
             
             self.stack.addWidget(view)
         except Exception as e:

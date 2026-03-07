@@ -9,7 +9,7 @@ class SupplierService:
     def __init__(self, db):
         self.db = db
         self.encryption = DataEncryption()
-        self.logger = logging.getLogger(__name__)
+        self.logger = logging.getLogger('INVENTORY_UPDATED')  # Supplier data affects inventory
 
     def fetch_all(self):
         try:
@@ -47,7 +47,7 @@ class SupplierService:
         except Error as e:
             raise DatabaseError(f"Failed to get supplier ID: {str(e)}")
 
-    def create_supplier(self, name, contact_person=None, email=None, phone=None, address=None):
+    def create_supplier(self, name, contact_person=None, email=None, phone=None, address=None, performed_by=None):
         if not name or not name.strip():
             raise ValidationError("Supplier name is required")
         
@@ -73,14 +73,17 @@ class SupplierService:
             self.db.commit()
             supplier_id = cursor.lastrowid
             cursor.close()
-            self.logger.info(f"Supplier created with ID {supplier_id}: {name}")
+            if performed_by:
+                self.logger.info(f"Supplier created with ID {supplier_id}: {name} - Username: {performed_by}")
+            else:
+                self.logger.info(f"Supplier created with ID {supplier_id}: {name}")
             return self.get_by_id(supplier_id)
         except Error as e:
             self.db.rollback()
             self.logger.error(f"Failed to create supplier: {str(e)}")
             raise DatabaseError(f"Failed to create supplier: {str(e)}")
 
-    def update_supplier(self, supplier_id, name, contact_person=None, email=None, phone=None, address=None):
+    def update_supplier(self, supplier_id, name, contact_person=None, email=None, phone=None, address=None, performed_by=None):
         if not name or not name.strip():
             raise ValidationError("Supplier name is required")
         
@@ -111,14 +114,17 @@ class SupplierService:
             cursor.execute(query, (name, contact_person, address, encrypted_email, encrypted_phone, supplier_id))
             self.db.commit()
             cursor.close()
-            self.logger.info(f"Supplier updated: {name} (ID: {supplier_id})")
+            if performed_by:
+                self.logger.info(f"Supplier updated: {name} (ID: {supplier_id}) - Username: {performed_by}")
+            else:
+                self.logger.info(f"Supplier updated: {name} (ID: {supplier_id})")
             return self.get_by_id(supplier_id)
         except Error as e:
             self.db.rollback()
             self.logger.error(f"Failed to update supplier: {str(e)}")
             raise DatabaseError(f"Failed to update supplier: {str(e)}")
 
-    def delete_supplier(self, supplier_id):
+    def delete_supplier(self, supplier_id, performed_by=None):
         existing = self.get_by_id(supplier_id)
         if not existing:
             raise NotFoundError(f"Supplier with ID {supplier_id} not found")
@@ -128,7 +134,10 @@ class SupplierService:
             cursor.execute("DELETE FROM suppliers WHERE id=%s", (supplier_id,))
             self.db.commit()
             cursor.close()
-            self.logger.info(f"Supplier deleted: ID {supplier_id}")
+            if performed_by:
+                self.logger.info(f"Supplier deleted: ID {supplier_id} - Username: {performed_by}")
+            else:
+                self.logger.info(f"Supplier deleted: ID {supplier_id}")
             return True
         except Error as e:
             self.db.rollback()

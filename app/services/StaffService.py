@@ -64,11 +64,13 @@ class StaffService:
             staff_id = cursor.lastrowid
             cursor.close()
             
-            # Log with who performed the action
+            # Log with USER_CREATED event type
+            from app.utils.logger import get_logger
+            create_logger = get_logger('USER_CREATED')
             if performed_by:
-                logger.info(f"Staff member created: {username} (ID: {staff_id}) - Username: {performed_by}")
+                create_logger.info(f"Staff member created: {username} (ID: {staff_id}) - Username: {performed_by}")
             else:
-                logger.info(f"Staff member created: {username} (ID: {staff_id})")
+                create_logger.info(f"Staff member created: {username} (ID: {staff_id})")
             return self.get_by_id(staff_id)
         except ValidationError:
             raise
@@ -77,7 +79,7 @@ class StaffService:
             logger.error(f"Failed to create staff: {str(e)}")
             raise DatabaseError(f"Failed to create staff: {str(e)}")
 
-    def update_staff(self, staff_id, full_name, username, password, role):
+    def update_staff(self, staff_id, full_name, username, password, role, performed_by=None):
         """Update staff member with password hashing if password provided"""
         self._validate_staff_data(full_name, username, password, role, allow_empty_password=True)
         
@@ -127,7 +129,13 @@ class StaffService:
             self.db.commit()
             cursor.close()
             
-            logger.info(f"Staff member updated: {username} (ID: {staff_id})")
+            # Log with USER_CREATED event type (treating update similar to creation for tracking)
+            from app.utils.logger import get_logger
+            update_logger = get_logger('USER_CREATED')
+            if performed_by:
+                update_logger.info(f"Staff member updated: {username} (ID: {staff_id}) - Username: {performed_by}")
+            else:
+                update_logger.info(f"Staff member updated: {username} (ID: {staff_id})")
             return self.get_by_id(staff_id)
         except ValidationError:
             raise
@@ -147,11 +155,13 @@ class StaffService:
             self.db.commit()
             cursor.close()
             
-            # Log with who performed the action
+            # Log with USER_DELETED event type
+            from app.utils.logger import get_logger
+            delete_logger = get_logger('USER_DELETED')
             if performed_by:
-                logger.info(f"Staff member deleted: ID {staff_id} - Username: {performed_by}")
+                delete_logger.info(f"Staff member deleted: ID {staff_id} - Username: {performed_by}")
             else:
-                logger.info(f"Staff member deleted: ID {staff_id}")
+                delete_logger.info(f"Staff member deleted: ID {staff_id}")
             return True
         except Error as e:
             self.db.rollback()

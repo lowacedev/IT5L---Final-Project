@@ -114,7 +114,9 @@ class StaffController:
             if not self.view.ask_confirmation("Are you sure you want to update this staff member?"):
                 return
             
-            self.service.update_staff(staff_id, full_name, username, password if password else "", role)
+            # Get current user's username for logging
+            performed_by = self.current_user.get('username') if self.current_user else None
+            self.service.update_staff(staff_id, full_name, username, password if password else "", role, performed_by=performed_by)
             self.view.show_success("Staff member updated successfully!")
             self.view.clear_form()
             self.load_data()

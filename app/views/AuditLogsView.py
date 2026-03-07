@@ -83,7 +83,7 @@ class AuditLogsView(BaseView):
         self.event_filter = QComboBox()
         self.event_filter.addItems([
             "ALL", "AUTH", "PASSWORD_CHANGE", "USER_CREATED", 
-            "USER_DELETED", "PRICE_MODIFIED", "INVENTORY_UPDATED", 
+            "USER_DELETED", "INVENTORY_UPDATED", 
             "CAPTCHA_FAILED", "ACCOUNT_LOCKED"
         ])
         self.event_filter.currentTextChanged.connect(self._on_filter_changed)
@@ -216,7 +216,7 @@ class AuditLogsView(BaseView):
                 sql += " AND event_type = %s"
                 params.append(event_type)
             
-            # Level filter
+            # Level filter (map to database level value)
             level = self.level_filter.currentText()
             if level != "ALL":
                 sql += " AND level = %s"

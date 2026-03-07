@@ -1,26 +1,47 @@
 import mysql.connector
 from mysql.connector import Error
+from app.security.config import SecurityConfig
+from app.utils.logger import get_logger, SecurityAuditLogger
+
+logger = get_logger(__name__)
 
 def get_db():
+    """
+    Get secure database connection using credentials from environment variables.
+    Prevents SQL injection by using parameterized queries.
+    """
     try:
+        # Validate security configuration
+        SecurityConfig.validate()
+        
+        # Get connection from secure config
         connection = mysql.connector.connect(
-            host="localhost",
-            user="root",
-            password="",  
-            database="computerparts_pos",
-            autocommit=False
+            host=SecurityConfig.DB_HOST,
+            user=SecurityConfig.DB_USER,
+            password=SecurityConfig.DB_PASSWORD,
+            database=SecurityConfig.DB_NAME,
+            port=SecurityConfig.DB_PORT,
+            autocommit=False,
+            use_pure=True  # Use pure Python implementation for consistency
         )
         
         if connection.is_connected():
-            print("Successfully connected to database")
+            logger.info("Successfully connected to database")
             return connection
             
     except Error as e:
-        print(f"Error connecting to MySQL: {e}")
+        error_msg = str(e)
+        # Don't expose sensitive details in error messages
+        safe_message = "Database connection failed"
+        logger.error(f"{safe_message}: {error_msg[:50]}")
+        
+        if SecurityConfig.DEBUG:
+            print(f"\n[DEBUG] Database Error: {e}")
+        
         print("\nTroubleshooting:")
         print("1. Is MySQL running?")
         print("2. Does database 'computerparts_pos' exist?")
-        print("3. Are credentials correct in db.py?")
+        print("3. Check .env file for correct credentials")
         print("4. Did you run schema.sql?")
         raise e
 

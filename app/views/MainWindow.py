@@ -15,10 +15,11 @@ from app.controllers.ReportsController import ReportsController
 from app.core.db import get_db
 
 class MainWindow(QMainWindow):
-    def __init__(self, user=None):
+    def __init__(self, user=None, db_connection=None):
         super().__init__()
         
         self.user = user or {"username": "admin", "role": "admin"}
+        self.db_connection = db_connection
         self.setWindowTitle("TechBayan")
         self.resize(1400, 800)
         
@@ -39,10 +40,7 @@ class MainWindow(QMainWindow):
         header_layout = QHBoxLayout(header_bar)
         header_layout.setContentsMargins(16, 10, 16, 10)
 
-        self.lbl_user = QLabel()
-        self.lbl_user.setObjectName("header_user")
-      
-        header_layout.addWidget(self.lbl_user)
+    
         header_layout.addStretch()
 
         self.btn_logout = QPushButton("Logout")
@@ -79,6 +77,7 @@ class MainWindow(QMainWindow):
         self.sidebar.btn_reports.clicked.connect(self.load_reports)
         self.sidebar.btn_suppliers.clicked.connect(self.load_suppliers)
         self.sidebar.btn_staff.clicked.connect(self.load_staff)
+        self.sidebar.btn_audit_logs.clicked.connect(self.load_audit_logs)
 
         
         try:
@@ -168,7 +167,7 @@ class MainWindow(QMainWindow):
         try:
             db = get_db()
             supplier_service = SupplierService(db)
-            view = InventoryView(supplier_service=supplier_service)
+            view = InventoryView(supplier_service=supplier_service, user=self.user)
             service = InventoryService(db)
             self.inventory_controller = InventoryController(service, view, self.user)
             
@@ -246,7 +245,32 @@ class MainWindow(QMainWindow):
             
             view = StaffView()
             service = StaffService(db)
-            self.staff_controller = StaffController(service, view)
+            self.staff_controller = StaffController(service, view, current_user=self.user)
+            
+            self.stack.addWidget(view)
+        except Exception as e:
+            from PyQt6.QtWidgets import QLabel, QMessageBox
+            QMessageBox.critical(self, "Database Error", 
+                               f"Could not connect to database:\n{str(e)}\n\nPlease check your database connection.")
+            label = QLabel(f"Database Error: {str(e)}")
+            label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            label.setStyleSheet("color: #EF4444; font-size: 14px; padding: 20px;")
+            self.stack.addWidget(label)
+
+    def load_audit_logs(self):
+        self.clear_stack()
+        self.sidebar.set_active("audit_logs")
+        if not self._can_access('audit_logs'):
+            QMessageBox.warning(self, "Access Denied", "You do not have permission to access Audit Logs.")
+            return
+        
+        try:
+            from app.views.AuditLogsView import AuditLogsView
+            from app.controllers.AuditLogsController import AuditLogsController
+            
+            db = self.db_connection or get_db()
+            view = AuditLogsView(db)
+            self.audit_logs_controller = AuditLogsController(db, view)
             
             self.stack.addWidget(view)
         except Exception as e:
@@ -264,7 +288,7 @@ class MainWindow(QMainWindow):
         
         perms = {
            
-            'admin': ['dashboard', 'inventory', 'reports', 'suppliers', 'staff'],
+            'admin': ['dashboard', 'inventory', 'reports', 'suppliers', 'staff', 'audit_logs'],
           
             'cashier': ['pos']
         }
@@ -277,11 +301,12 @@ class MainWindow(QMainWindow):
         self.sidebar.btn_reports.setVisible('reports' in allowed)
         self.sidebar.btn_suppliers.setVisible('suppliers' in allowed)
         self.sidebar.btn_staff.setVisible('staff' in allowed)
+        self.sidebar.btn_audit_logs.setVisible('audit_logs' in allowed)
 
     def _can_access(self, page_key: str) -> bool:
         role = self.user.get('role', 'cashier')
         perms = {
-            'admin': ['dashboard', 'inventory', 'reports', 'suppliers', 'staff'],
+            'admin': ['dashboard', 'inventory', 'reports', 'suppliers', 'staff', 'audit_logs'],
             'cashier': ['pos']
         }
         allowed = perms.get(role, ['pos'])
@@ -291,13 +316,13 @@ class MainWindow(QMainWindow):
         try:
             from PyQt6.QtWidgets import QApplication, QDialog, QMessageBox
             from app.views.LoginView import LoginView
-            from app.services.UserService import UserService
+            from app.services.SecureUserService import SecureUserService
             from app.controllers.LoginController import LoginController
             from app.core.db import get_db
 
             self.hide()
             db = get_db()
-            user_service = UserService(db)
+            user_service = SecureUserService(db)
             login_view = LoginView()
             login_controller = LoginController(user_service, login_view)
             

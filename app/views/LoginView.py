@@ -9,7 +9,7 @@ class LoginView(QDialog):
     def __init__(self, parent=None):
         super().__init__()
         self.setWindowTitle("TechBayan")
-        self.setFixedSize(400, 500)
+        self.setFixedSize(450, 750)
         self.logged_in_user = None
         self.setup_ui()
         self.setStyleSheet(open("app/styles/styles.qss").read())
@@ -48,7 +48,7 @@ class LoginView(QDialog):
         form_frame.setObjectName("form_frame")
         form_layout = QVBoxLayout(form_frame)
         form_layout.setContentsMargins(20, 20, 20, 20)
-        form_layout.setSpacing(15)
+        form_layout.setSpacing(12)
         
         self.lbl_username = QLabel("Username")
         self.lbl_username.setStyleSheet("font-weight: 600; color: #374151;")
@@ -67,6 +67,52 @@ class LoginView(QDialog):
         form_layout.addWidget(self.txt_username)
         form_layout.addWidget(self.lbl_password)
         form_layout.addWidget(self.txt_password)
+        
+        # CAPTCHA Section
+        captcha_label = QLabel("Verify CAPTCHA")
+        captcha_label.setStyleSheet("font-weight: 600; color: #374151;")
+        form_layout.addWidget(captcha_label)
+        
+        # CAPTCHA Image Display
+        self.captcha_image_label = QLabel()
+        self.captcha_image_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.captcha_image_label.setFixedHeight(120)
+        self.captcha_image_label.setStyleSheet("background-color: #F3F4F6; border: 1px solid #D1D5DB; border-radius: 4px;")
+        form_layout.addWidget(self.captcha_image_label)
+        
+        # CAPTCHA Refresh Button (below image)
+        self.btn_refresh_captcha = QPushButton(" Refresh CAPTCHA")
+        self.btn_refresh_captcha.setFixedHeight(38)
+        self.btn_refresh_captcha.setStyleSheet("""
+            QPushButton {
+                background-color: #F3F4F6;
+                color: #374151;
+                border: 1px solid #D1D5DB;
+                border-radius: 4px;
+                font-weight: 500;
+                font-size: 12px;
+            }
+            QPushButton:hover {
+                background-color: #E5E7EB;
+                border-color: #9CA3AF;
+            }
+            QPushButton:pressed {
+                background-color: #D1D5DB;
+            }
+        """)
+        form_layout.addWidget(self.btn_refresh_captcha)
+        
+        # Add spacing after refresh button
+        form_layout.addSpacing(5)
+        
+        # CAPTCHA Input
+        self.lbl_captcha = QLabel("Enter CAPTCHA Code")
+        self.lbl_captcha.setStyleSheet("font-weight: 600; color: #374151;")
+        self.txt_captcha = QLineEdit()
+        self.txt_captcha.setPlaceholderText("Enter the code above (case-insensitive)")
+        self.txt_captcha.setMinimumHeight(40)
+        form_layout.addWidget(self.lbl_captcha)
+        form_layout.addWidget(self.txt_captcha)
         
         main_layout.addWidget(form_frame)
         
@@ -99,12 +145,30 @@ class LoginView(QDialog):
     def collect_form_data(self):
         return (
             self.txt_username.text().strip(),
-            self.txt_password.text().strip()
+            self.txt_password.text().strip(),
+            self.txt_captcha.text().strip()
         )
 
     def clear_form(self):
         self.txt_username.clear()
         self.txt_password.clear()
+        self.txt_captcha.clear()
+    
+    def clear_captcha_input(self):
+        """Clear only the CAPTCHA input field"""
+        self.txt_captcha.clear()
+    
+    def set_captcha_image(self, image_path: str):
+        """
+        Display CAPTCHA image.
+        
+        Args:
+            image_path (str): Path to CAPTCHA image
+        """
+        if os.path.exists(image_path):
+            pixmap = QPixmap(image_path)
+            pixmap = pixmap.scaledToWidth(300, Qt.TransformationMode.SmoothTransformation)
+            self.captcha_image_label.setPixmap(pixmap)
 
     def show_error(self, message, title="Error"):
         QMessageBox.critical(self, title, message)
@@ -114,4 +178,5 @@ class LoginView(QDialog):
 
     def show_success(self, message):
         QMessageBox.information(self, "Success", message)
+
 

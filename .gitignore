@@ -1,0 +1,43 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+*.egg-info/
+dist/
+build/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Environment
+.env
+.env.local
+
+# Logs
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Database
+*.sqlite
+*.db
+
+# SQL files with data
+sql/computerparts_pos.sql
+sql/computerparts_pos\ \(1\).sql
+sql/migration.sql
+
+# Project specific
+*.pyc
+.pytest_cache/
+.coverage
+htmlcov/

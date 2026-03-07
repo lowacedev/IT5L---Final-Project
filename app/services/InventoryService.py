@@ -1,6 +1,10 @@
 from mysql.connector import Error
 from app.models.entities import InventoryItem, StockMovement
 from app.exceptions import ValidationError, NotFoundError, DatabaseError
+import logging
+
+
+logger = logging.getLogger(__name__)
 
 
 class InventoryService:
@@ -58,9 +62,11 @@ class InventoryService:
             """, (part_name, category, brand, model_number, quantity, cost_price, selling_price, supplier_id))
             self.db.commit()
             item_id = cursor.lastrowid
+            logger.info(f"Inventory item created: {part_name} (ID: {item_id})")
             return self.get_by_id(item_id)
         except Error as e:
             self.db.rollback()
+            logger.error(f"Failed to create inventory item: {str(e)}")
             raise DatabaseError(f"Failed to create item: {str(e)}")
         finally:
             if cursor:
@@ -100,9 +106,11 @@ class InventoryService:
                 WHERE id=%s
             """, (part_name, category, brand, model_number, quantity, cost_price, selling_price, supplier_id, item_id))
             self.db.commit()
+            logger.info(f"Inventory item updated: {part_name} (ID: {item_id})")
             return self.get_by_id(item_id)
         except Error as e:
             self.db.rollback()
+            logger.error(f"Failed to update inventory item: {str(e)}")
             raise DatabaseError(f"Failed to update item: {str(e)}")
         finally:
             if cursor:
@@ -115,12 +123,15 @@ class InventoryService:
         
         cursor = None
         try:
+            item_name = existing.part_name
             cursor = self.db.cursor()
             cursor.execute("DELETE FROM inventory_items WHERE id=%s", (item_id,))
             self.db.commit()
+            logger.info(f"Inventory item deleted: {item_name} (ID: {item_id})")
             return True
         except Error as e:
             self.db.rollback()
+            logger.error(f"Failed to delete inventory item: {str(e)}")
             raise DatabaseError(f"Failed to delete item: {str(e)}")
         finally:
             if cursor:
@@ -200,11 +211,13 @@ class InventoryService:
             )
 
             self.db.commit()
+            logger.info(f"Stock movement recorded: Type={movement_type}, Item ID={item_id}, Quantity={quantity}, Reason={reason}")
             return movement_id
         except (ValidationError, NotFoundError):
             raise
         except Error as e:
             self.db.rollback()
+            logger.error(f"Failed to record stock movement: {str(e)}")
             raise DatabaseError(f"Failed to record stock movement: {str(e)}")
         finally:
             if cursor:

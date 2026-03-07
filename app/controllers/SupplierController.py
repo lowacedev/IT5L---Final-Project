@@ -28,6 +28,54 @@ class SupplierController:
         
         name, contact_person, email, phone, address = data
         
+        # Validate input fields - ALL REQUIRED
+        from app.security.input_validator import InputValidator
+        
+        # Check all fields are not empty
+        if not name or not name.strip():
+            self.view.show_error("Supplier name is required")
+            return
+        
+        if not contact_person or not contact_person.strip():
+            self.view.show_error("Contact person is required")
+            return
+        
+        if not email or not email.strip():
+            self.view.show_error("Email is required")
+            return
+        
+        if not phone or not phone.strip():
+            self.view.show_error("Phone is required")
+            return
+        
+        if not address or not address.strip():
+            self.view.show_error("Address is required")
+            return
+        
+        # Validate supplier name
+        is_valid, msg = InputValidator.validate_supplier_name(name)
+        if not is_valid:
+            self.view.show_error(f"Supplier name: {msg}")
+            return
+        
+        # Validate contact person
+        is_valid, msg = InputValidator.validate_contact_person(contact_person)
+        if not is_valid:
+            self.view.show_error(f"Contact person: {msg}")
+            return
+        
+        # Validate email
+        is_valid, msg = InputValidator.validate_email(email)
+        if not is_valid:
+            self.view.show_error(f"Email: {msg}")
+            return
+        
+        # Validate phone - PHILIPPINE FORMAT
+        is_valid, msg = InputValidator.validate_philippine_phone(phone)
+        if not is_valid:
+            self.view.show_error(f"Phone: {msg}")
+            return
+        
         try:
             self.service.create_supplier(name, contact_person, email, phone, address)
             self.view.show_success("Supplier added successfully!")
@@ -47,6 +95,54 @@ class SupplierController:
             return
         
         supplier_id, name, contact_person, email, phone, address = data_with_id
+        
+        # Validate input fields - ALL REQUIRED
+        from app.security.input_validator import InputValidator
+        
+        # Check all fields are not empty
+        if not name or not name.strip():
+            self.view.show_error("Supplier name is required")
+            return
+        
+        if not contact_person or not contact_person.strip():
+            self.view.show_error("Contact person is required")
+            return
+        
+        if not email or not email.strip():
+            self.view.show_error("Email is required")
+            return
+        
+        if not phone or not phone.strip():
+            self.view.show_error("Phone is required")
+            return
+        
+        if not address or not address.strip():
+            self.view.show_error("Address is required")
+            return
+        
+        # Validate supplier name
+        is_valid, msg = InputValidator.validate_supplier_name(name)
+        if not is_valid:
+            self.view.show_error(f"Supplier name: {msg}")
+            return
+        
+        # Validate contact person
+        is_valid, msg = InputValidator.validate_contact_person(contact_person)
+        if not is_valid:
+            self.view.show_error(f"Contact person: {msg}")
+            return
+        
+        # Validate email
+        is_valid, msg = InputValidator.validate_email(email)
+        if not is_valid:
+            self.view.show_error(f"Email: {msg}")
+            return
+        
+        # Validate phone - PHILIPPINE FORMAT
+        is_valid, msg = InputValidator.validate_philippine_phone(phone)
+        if not is_valid:
+            self.view.show_error(f"Phone: {msg}")
+            return
         
         if not self.view.ask_confirmation("Are you sure you want to update this supplier?"):
             return

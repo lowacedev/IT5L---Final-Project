@@ -57,8 +57,9 @@ class Sidebar(QWidget):
         self.btn_reports = QPushButton("Reports")
         self.btn_suppliers = QPushButton("Suppliers")
         self.btn_staff = QPushButton("Staff")
+        self.btn_audit_logs = QPushButton("Audit Logs")
 
-        self.buttons = [self.btn_dashboard, self.btn_pos, self.btn_inventory, self.btn_reports, self.btn_suppliers, self.btn_staff]
+        self.buttons = [self.btn_dashboard, self.btn_pos, self.btn_inventory, self.btn_reports, self.btn_suppliers, self.btn_staff, self.btn_audit_logs]
         
         for btn in self.buttons:
             btn.setObjectName("sidebar_button")
@@ -88,3 +89,5 @@ class Sidebar(QWidget):
             self.btn_suppliers.setChecked(True)
         elif button_name == "staff":
             self.btn_staff.setChecked(True)
+        elif button_name == "audit_logs":
+            self.btn_audit_logs.setChecked(True)

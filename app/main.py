@@ -20,9 +20,10 @@ from PyQt6.QtWidgets import QApplication
 QGuiApplication.setAttribute(Qt.ApplicationAttribute.AA_ShareOpenGLContexts)
 from app.views.MainWindow import MainWindow
 from app.views.LoginView import LoginView
-from app.services.UserService import UserService
+from app.services.SecureUserService import SecureUserService
 from app.controllers.LoginController import LoginController
 from app.core.db import get_db
+from app.utils.logger import SecurityLogger
 
 def main():
     app = QApplication(sys.argv)
@@ -32,7 +33,10 @@ def main():
     try:
         db = get_db()
         
-        user_service = UserService(db)
+        # Initialize database logging
+        SecurityLogger.setup_logging(db)
+        
+        user_service = SecureUserService(db)
         login_view = LoginView()
         login_controller = LoginController(user_service, login_view)
         
@@ -40,7 +44,7 @@ def main():
             user = login_view.logged_in_user
             
   
-            window = MainWindow(user)
+            window = MainWindow(user, db)
             window.show()
             
             sys.exit(app.exec())

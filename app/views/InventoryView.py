@@ -78,10 +78,11 @@ class FixedPopupCombo(QComboBox):
 
 
 class InventoryView(BaseView):
-    def __init__(self, supplier_service=None):
+    def __init__(self, supplier_service=None, user=None):
         super().__init__()
         self.setObjectName("content_area")
         self.supplier_service = supplier_service
+        self.user = user or {'role': 'admin'}
         
         layout = QVBoxLayout()
         layout.setContentsMargins(30, 30, 30, 30)
@@ -179,6 +180,11 @@ class InventoryView(BaseView):
         btn_row.addWidget(self.update_btn)
         btn_row.addWidget(self.clear_btn)
         btn_row.addStretch()
+        
+        # Hide add/update buttons for cashiers (read-only access)
+        is_admin = self.user.get('role', 'admin') == 'admin'
+        self.add_btn.setVisible(is_admin)
+        self.update_btn.setVisible(is_admin)
 
         form_layout.addLayout(btn_row)
         layout.addWidget(form_frame)
@@ -383,14 +389,19 @@ class InventoryView(BaseView):
 
     def load_suppliers(self):
         def _populate(suppliers_list):
-            self.supplier_dropdown.clear()
-            self.supplier_dropdown.addItem("", None)
-            for supplier in suppliers_list:
-                if not supplier:
-                    continue
-                self.supplier_dropdown.addItem(supplier.name, supplier.id)
-            if len(suppliers_list) == 0:
-                self.supplier_dropdown.addItem("No suppliers available", None)
+            try:
+                self.supplier_dropdown.clear()
+                self.supplier_dropdown.addItem("", None)
+                for supplier in suppliers_list:
+                    if not supplier:
+                        continue
+                    self.supplier_dropdown.addItem(supplier.name, supplier.id)
+                if len(suppliers_list) == 0:
+                    self.supplier_dropdown.addItem("No suppliers available", None)
+            except Exception as e:
+                print(f"Error populating suppliers dropdown: {str(e)}")
+                import traceback
+                traceback.print_exc()
         try:
             suppliers = getattr(self, '_last_suppliers', None)
             if suppliers is None:
@@ -402,6 +413,8 @@ class InventoryView(BaseView):
             self._last_suppliers = suppliers
         except Exception as e:
             print(f"Error loading suppliers: {str(e)}")
+            import traceback
+            traceback.print_exc()
 
     def set_suppliers(self, suppliers):
         self._last_suppliers = suppliers or []
@@ -474,23 +487,33 @@ class InventoryView(BaseView):
         self.load_inventory_items_to_combos(items)
 
     def load_stock_log_table(self, movements):
-        self.stock_log_table.setRowCount(len(movements))
-        for r, movement in enumerate(movements):
-            values = [
-                movement.id,
-                movement.item_name,
-                movement.movement_type,
-                movement.quantity,
-                movement.reason,
-                movement.notes,
-                movement.movement_date,
-                movement.username
-            ]
-            for c, value in enumerate(values):
-                cell = QTableWidgetItem(str(value) if value is not None else "")
-                if c in [0, 1, 2, 3]:
-                    cell.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
-                self.stock_log_table.setItem(r, c, cell)
+        try:
+            self.stock_log_table.setRowCount(len(movements))
+            for r, movement in enumerate(movements):
+                try:
+                    values = [
+                        movement.id,
+                        movement.item_name,
+                        movement.movement_type,
+                        movement.quantity,
+                        movement.reason,
+                        movement.notes,
+                        movement.movement_date,
+                        movement.username
+                    ]
+                    for c, value in enumerate(values):
+                        cell = QTableWidgetItem(str(value) if value is not None else "")
+                        if c in [0, 1, 2, 3]:
+                            cell.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+                        self.stock_log_table.setItem(r, c, cell)
+                except Exception as e:
+                    print(f"Error loading movement row {r}: {str(e)}")
+                    import traceback
+                    traceback.print_exc()
+        except Exception as e:
+            print(f"Error loading stock log table: {str(e)}")
+            import traceback
+            traceback.print_exc()
 
     def on_row_selected(self):
         row = self.table.currentRow()

@@ -1,0 +1,388 @@
+"""
+Database Logging Handler
+Integrates Python logging with MySQL database for persistent log storage.
+Allows real-time log monitoring and querying.
+"""
+
+import logging
+import threading
+from datetime import datetime
+from queue import Queue
+from typing import Optional, Dict, Any
+
+
+class DatabaseLoggingHandler(logging.Handler):
+    """Custom logging handler that writes logs to database"""
+    
+    def __init__(self, db_connection=None, queue_size: int = 1000):
+        """
+        Initialize database logging handler.
+        
+        Args:
+            db_connection: Database connection object
+            queue_size: Size of the log queue for buffering
+        """
+        super().__init__()
+        self.db_connection = db_connection
+        self.log_queue = Queue(maxsize=queue_size)
+        self.stop_event = threading.Event()
+        
+        # Start background worker thread
+        self.worker_thread = threading.Thread(target=self._process_logs, daemon=True)
+        self.worker_thread.start()
+    
+    def emit(self, record: logging.LogRecord) -> None:
+        """
+        Emit a log record to database via queue.
+        
+        Args:
+            record: LogRecord to emit
+        """
+        try:
+            # Parse log context
+            log_data = self._parse_record(record)
+            
+            # Queue the log for async processing
+            if not self.log_queue.full():
+                self.log_queue.put(log_data, block=False)
+        except Exception:
+            self.handleError(record)
+    
+    def _parse_record(self, record: logging.LogRecord) -> Dict[str, Any]:
+        """
+        Parse log record into structured data.
+        
+        Args:
+            record: LogRecord to parse
+            
+        Returns:
+            Dict with parsed log data
+        """
+        full_message = self.format(record)
+        
+        # Extract context from logger name (e.g., "SECURITY.AUTH")
+        logger_name = record.name
+        parts = logger_name.split('.')
+        
+        event_type = parts[-1].upper() if len(parts) > 0 else "SYSTEM"
+        module = parts[0] if len(parts) > 0 else "APP"
+        
+        # Remove timestamp from message for details (avoid duplication)
+        message = self._remove_timestamp_prefix(full_message)
+        
+        # Extract structured fields from message
+        username = self._extract_field(message, "Username")
+        user_id = self._extract_field(message, "User:", is_int=True)
+        action = self._extract_action(message, event_type)
+        reason = self._extract_field(message, "Reason")
+        
+        return {
+            'event_type': event_type,
+            'module': module,
+            'level': record.levelname,
+            'message': message,
+            'username': username,
+            'user_id': user_id,
+            'action': action,
+            'reason': reason,
+            'timestamp': datetime.fromtimestamp(record.created)
+        }
+    
+    def _remove_timestamp_prefix(self, message: str) -> str:
+        """
+        Extract only the message content, removing timestamp, level, and location.
+        
+        Pattern: [YYYY-MM-DD HH:MM:SS] LEVEL [module:line] - MESSAGE
+        Result: MESSAGE only
+        
+        Args:
+            message: Formatted log message
+            
+        Returns:
+            Message content only
+        """
+        try:
+            import re
+            # Remove: [timestamp] LEVEL [location] - 
+            # Keeps: the actual message after the dash
+            pattern = r'^\[\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\]\s+\w+\s+\[.*?\]\s*-\s*'
+            cleaned = re.sub(pattern, '', message)
+            
+            # Also handle case where timestamp was already removed by format
+            if cleaned == message:
+                # Try pattern without timestamp
+                pattern2 = r'^\w+\s+\[.*?\]\s*-\s*'
+                cleaned = re.sub(pattern2, '', message)
+            
+            return cleaned if cleaned else message
+        except:
+            return message
+    
+    def _extract_resource(self, message: str, event_type: str) -> Optional[str]:
+        """
+        Extract resource being accessed.
+        
+        Args:
+            message: Log message
+            event_type: Type of event
+            
+        Returns:
+            Resource name (table/module being accessed)
+        """
+        # Try explicit Resource field first
+        resource = self._extract_field(message, "Resource")
+        if resource:
+            return resource
+        
+        # Infer resource from message content
+        resource_mappings = {
+            'suppliers': ['supplier', 'suppliers'],
+            'staff': ['staff', 'employee'],
+            'inventory': ['inventory', 'product', 'stock'],
+            'sales': ['sale', 'sales', 'checkout', 'pos'],
+            'users': ['user', 'account', 'password'],
+            'database': ['database', 'connection', 'db'],
+        }
+        
+        message_lower = message.lower()
+        for resource_type, keywords in resource_mappings.items():
+            for keyword in keywords:
+                if keyword in message_lower:
+                    return resource_type
+        
+        # System logs don't have resources
+        if event_type in ['DB', 'ENCRYPTION', 'ERROR']:
+            return None
+        
+        return None
+    
+    def _extract_action(self, message: str, event_type: str) -> Optional[str]:
+        """
+        Extract action being performed.
+        
+        Args:
+            message: Log message
+            event_type: Type of event
+            
+        Returns:
+            Action name (create, update, delete, login, etc.)
+        """
+        # Try explicit Action field first
+        action = self._extract_field(message, "Action")
+        if action:
+            return action
+        
+        # Infer action from message content
+        action_keywords = {
+            'CREATE': ['created', 'create', 'added', 'add'],
+            'UPDATE': ['updated', 'update', 'modified', 'modify'],
+            'DELETE': ['deleted', 'delete', 'removed', 'remove'],
+            'LOGIN': ['login', 'logged in'],
+            'LOGOUT': ['logout', 'logged out'],
+            'READ': ['retrieved', 'fetched', 'queried'],
+            'ENCRYPT': ['encrypted', 'encrypt'],
+            'DECRYPT': ['decrypted', 'decrypt'],
+            'VALIDATE': ['validated', 'validate'],
+        }
+        
+        message_lower = message.lower()
+        for action_type, keywords in action_keywords.items():
+            for keyword in keywords:
+                if keyword in message_lower:
+                    return action_type
+        
+        return None
+    
+    def _extract_field(self, message: str, field_name: str, is_int: bool = False) -> Optional[str]:
+        """
+        Extract field value from log message.
+        
+        Args:
+            message: Log message
+            field_name: Field name to extract
+            is_int: Convert to int if True
+            
+        Returns:
+            Extracted value or None
+        """
+        try:
+            if field_name in message:
+                start = message.find(field_name) + len(field_name)
+                start = message.find(':', start) + 1 if ':' in message[start:start+20] else start
+                
+                # Find end of value
+                end_chars = [' - ', '\n', '\t']
+                end = len(message)
+                for char_seq in end_chars:
+                    pos = message.find(char_seq, start)
+                    if pos != -1 and pos < end:
+                        end = pos
+                
+                value = message[start:end].strip()
+                return int(value) if is_int and value.isdigit() else (value if value else None)
+        except:
+            pass
+        return None
+    
+    def _process_logs(self) -> None:
+        """Process queued logs and write to database"""
+        while not self.stop_event.is_set():
+            try:
+                # Get log from queue with timeout
+                log_data = self.log_queue.get(timeout=5)
+                
+                # Write to appropriate database table based on event type
+                self._write_to_database(log_data)
+                
+            except Exception:
+                # Queue timeout or error - continue
+                pass
+    
+    def _write_to_database(self, log_data: Dict[str, Any]) -> None:
+        """
+        Write log data to appropriate database table.
+        
+        Args:
+            log_data: Log data dictionary
+        """
+        if not self.db_connection:
+            return
+        
+        try:
+            cursor = self.db_connection.cursor()
+            
+            event_type = log_data['event_type']
+            
+            # Determine table and write accordingly
+            if event_type == 'AUTH':
+                self._write_auth_log(cursor, log_data)
+            elif event_type == 'AUTHORIZATION':
+                self._write_access_control_log(cursor, log_data)
+            elif event_type == 'AUDIT':
+                self._write_user_activity_log(cursor, log_data)
+            elif event_type == 'DATA_ACCESS':
+                self._write_data_access_log(cursor, log_data)
+            else:
+                self._write_general_audit_log(cursor, log_data)
+            
+            self.db_connection.commit()
+            cursor.close()
+            
+        except Exception as e:
+            try:
+                if self.db_connection:
+                    self.db_connection.rollback()
+            except:
+                pass
+    
+    def _write_auth_log(self, cursor, log_data: Dict[str, Any]) -> None:
+        """Write authentication log"""
+        status = "SUCCESS" if "SUCCESS" in log_data['message'] else "FAILED"
+        
+        sql = """
+        INSERT INTO security_audit_logs 
+        (event_type, username, user_id, action, status, details, timestamp)
+        VALUES (%s, %s, %s, %s, %s, %s, %s)
+        """
+        
+        cursor.execute(sql, (
+            'AUTH',
+            log_data['username'],
+            log_data['user_id'],
+            'LOGIN',
+            status,
+            log_data['message'],
+            log_data['timestamp']
+        ))
+    
+    def _write_access_control_log(self, cursor, log_data: Dict[str, Any]) -> None:
+        """Write access control log"""
+        sql = """
+        INSERT INTO access_control_logs
+        (username, user_id, resource, action, allowed, timestamp)
+        VALUES (%s, %s, %s, %s, %s, %s)
+        """
+        
+        allowed = "DENIED" not in log_data['message']
+        
+        cursor.execute(sql, (
+            log_data['username'],
+            log_data['user_id'],
+            log_data['resource'],
+            log_data['action'],
+            allowed,
+            log_data['timestamp']
+        ))
+    
+    def _write_user_activity_log(self, cursor, log_data: Dict[str, Any]) -> None:
+        """Write user activity log"""
+        sql = """
+        INSERT INTO user_activity_logs
+        (username, user_id, action, module, details, timestamp)
+        VALUES (%s, %s, %s, %s, %s, %s)
+        """
+        
+        cursor.execute(sql, (
+            log_data['username'],
+            log_data['user_id'],
+            log_data['action'],
+            log_data['module'],
+            log_data['message'],
+            log_data['timestamp']
+        ))
+    
+    def _write_data_access_log(self, cursor, log_data: Dict[str, Any]) -> None:
+        """Write data access log"""
+        sql = """
+        INSERT INTO security_audit_logs
+        (event_type, username, user_id, resource, action, details, timestamp)
+        VALUES (%s, %s, %s, %s, %s, %s, %s)
+        """
+        
+        cursor.execute(sql, (
+            'DATA_ACCESS',
+            log_data['username'],
+            log_data['user_id'],
+            log_data['resource'],
+            log_data['action'],
+            log_data['message'],
+            log_data['timestamp']
+        ))
+    
+    def _write_general_audit_log(self, cursor, log_data: Dict[str, Any]) -> None:
+        """Write general audit log"""
+        status = "SUCCESS" if log_data['level'] in ['INFO', 'DEBUG'] else "FAILED"
+        
+        sql = """
+        INSERT INTO security_audit_logs
+        (event_type, username, user_id, action, status, details, timestamp)
+        VALUES (%s, %s, %s, %s, %s, %s, %s)
+        """
+        
+        cursor.execute(sql, (
+            log_data['event_type'],
+            log_data['username'],
+            log_data['user_id'],
+            log_data['action'],
+            status,
+            log_data['message'],
+            log_data['timestamp']
+        ))
+    
+    def close(self) -> None:
+        """Close handler and wait for queue to drain"""
+        self.stop_event.set()
+        
+        # Process remaining logs
+        while not self.log_queue.empty():
+            try:
+                log_data = self.log_queue.get_nowait()
+                self._write_to_database(log_data)
+            except:
+                break
+        
+        # Wait for worker thread
+        if self.worker_thread.is_alive():
+            self.worker_thread.join(timeout=5)
+        
+        super().close()

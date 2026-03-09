@@ -65,9 +65,9 @@ class InventoryService:
             # Log with INVENTORY_UPDATED event type
             inv_logger = logging.getLogger('INVENTORY_UPDATED')
             if performed_by:
-                inv_logger.info(f\"Inventory item created: {part_name} (ID: {item_id}) - Username: {performed_by}\")
+                inv_logger.info(f"Inventory item created: {part_name} (ID: {item_id}) - Username: {performed_by}")
             else:
-                inv_logger.info(f\"Inventory item created: {part_name} (ID: {item_id})\")
+                inv_logger.info(f"Inventory item created: {part_name} (ID: {item_id})")
             return self.get_by_id(item_id)
         except Error as e:
             self.db.rollback()

@@ -44,6 +44,9 @@ class DashboardService:
             cursor.close()
             return results
         except Exception as e:
+            # If table doesn't exist, return empty list instead of crashing
+            if "doesn't exist" in str(e).lower() or "no table" in str(e).lower():
+                return []
             raise DatabaseError(f"Failed to get inventory summary: {str(e)}")
 
     def get_sales_trend(self, start_date, end_date):

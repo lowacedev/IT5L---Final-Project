@@ -1,4 +1,5 @@
 from app.exceptions import ValidationError, NotFoundError, DatabaseError
+from app.utils.logger import SecurityAuditLogger
 
 
 class SupplierController:
@@ -80,6 +81,14 @@ class SupplierController:
         try:
             performed_by = self.current_user.get('username') if self.current_user else None
             self.service.create_supplier(name, contact_person, email, phone, address, performed_by=performed_by)
+            
+            # Log user action
+            SecurityAuditLogger.log_user_action(
+                performed_by or 'unknown',
+                'create_supplier',
+                f'Created supplier: {name} (Contact: {contact_person})'
+            )
+            
             self.view.show_success("Supplier added successfully!")
             self.view.clear_form()
             self.load_data()
@@ -152,6 +161,14 @@ class SupplierController:
         try:
             performed_by = self.current_user.get('username') if self.current_user else None
             self.service.update_supplier(supplier_id, name, contact_person, email, phone, address, performed_by=performed_by)
+            
+            # Log user action
+            SecurityAuditLogger.log_user_action(
+                performed_by or 'unknown',
+                'update_supplier',
+                f'Updated supplier ID {supplier_id}: {name}'
+            )
+            
             self.view.show_success("Supplier updated successfully!")
             self.view.clear_form()
             self.load_data()
@@ -176,6 +193,14 @@ class SupplierController:
         try:
             performed_by = self.current_user.get('username') if self.current_user else None
             self.service.delete_supplier(supplier_id, performed_by=performed_by)
+            
+            # Log user action
+            SecurityAuditLogger.log_user_action(
+                performed_by or 'unknown',
+                'delete_supplier',
+                f'Deleted supplier ID: {supplier_id}'
+            )
+            
             self.view.show_success("Supplier deleted successfully!")
             self.view.clear_form()
             self.load_data()

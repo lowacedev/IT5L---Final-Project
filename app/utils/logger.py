@@ -30,7 +30,17 @@ class SecurityLogger:
         
         # Configure root logger
         root_logger = logging.getLogger()
-        root_logger.setLevel(getattr(logging, SecurityConfig.LOG_LEVEL))
+        
+        # Clear existing handlers to prevent duplicates (important for multi-threaded apps)
+        for handler in root_logger.handlers[:]:
+            root_logger.removeHandler(handler)
+        
+        root_logger.setLevel(logging.INFO)  # INFO level - reduces noise from debug logs
+        
+        # Silence noisy external libraries
+        logging.getLogger('mysql.connector').setLevel(logging.WARNING)
+        logging.getLogger('mysql.connector.abstracts').setLevel(logging.WARNING)
+        logging.getLogger('mysql.connector.connection').setLevel(logging.WARNING)
         
         # File handler with rotation
         file_handler = logging.handlers.RotatingFileHandler(
@@ -38,9 +48,11 @@ class SecurityLogger:
             maxBytes=10485760,  # 10MB
             backupCount=5
         )
+        file_handler.setLevel(logging.INFO)  # Only INFO and above
         
         # Console handler
         console_handler = logging.StreamHandler()
+        console_handler.setLevel(logging.WARNING)  # Console shows only warnings and errors
         
         # Formatter
         formatter = logging.Formatter(

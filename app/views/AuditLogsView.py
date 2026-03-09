@@ -35,15 +35,18 @@ class AuditLogsView(BaseView):
         self.auto_refresh = True
         self.refresh_interval = 5000  # 5 seconds
         
+        # Setup auto-refresh timer BEFORE UI setup
+        self.refresh_timer = QTimer()
+        self.refresh_timer.timeout.connect(self._refresh_logs)
+        
         # Setup UI
         self._setup_ui()
         
         # Connect signals
         self.logs_refreshed.connect(self._on_logs_refreshed)
         
-        # Setup auto-refresh timer
-        self.refresh_timer = QTimer()
-        self.refresh_timer.timeout.connect(self._refresh_logs)
+        # Load initial logs and start auto-refresh
+        self._refresh_logs()
         self.refresh_timer.start(self.refresh_interval)
     
     def _setup_ui(self) -> None:
@@ -203,6 +206,7 @@ class AuditLogsView(BaseView):
         if not self.db_connection:
             return []
         
+        cursor = None
         try:
             cursor = self.db_connection.cursor(dictionary=True)
             
@@ -245,13 +249,15 @@ class AuditLogsView(BaseView):
             
             cursor.execute(sql, params)
             logs = cursor.fetchall()
-            cursor.close()
             
-            return logs
+            return logs if logs else []
             
         except Exception as e:
-            logger = None  # No logging to avoid circular import
+            print(f"Error fetching logs: {e}")
             return []
+        finally:
+            if cursor:
+                cursor.close()
     
     def _on_logs_refreshed(self, logs: List[Dict[str, Any]]) -> None:
         """Update table with fetched logs"""
@@ -357,9 +363,10 @@ class AuditLogsView(BaseView):
     
     def _toggle_auto_refresh(self, state: int) -> None:
         """Toggle auto-refresh"""
-        self.auto_refresh = (state == Qt.CheckState.Checked.value)
+        self.auto_refresh = (state == 2)  # 2 is checked state in PyQt6
         
         if self.auto_refresh:
+            self._refresh_logs()  # Refresh immediately when enabling
             self.refresh_timer.start(self.refresh_interval)
         else:
             self.refresh_timer.stop()

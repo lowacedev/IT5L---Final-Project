@@ -271,6 +271,34 @@ def get_session_manager() -> SessionManager:
     return _session_manager
 
 
+def check_access_with_logging(user_role: UserRole, resource: str, action: str, user_id: int = None, username: str = None) -> bool:
+    """
+    Check if user has access to resource/action and log denied attempts.
+    
+    Args:
+        user_role (UserRole): User role
+        resource (str): Resource being accessed
+        action (str): Action being performed
+        user_id (int): User ID for logging
+        username (str): Username for logging
+        
+    Returns:
+        bool: True if access allowed
+    """
+    allowed = RBACManager.has_resource_action(user_role, resource, action)
+    
+    if not allowed:
+        # Log denied access attempt
+        from app.utils.logger import SecurityAuditLogger
+        SecurityAuditLogger.log_unauthorized_access_attempt(
+            username or f"user_{user_id}" or "unknown",
+            resource,
+            action
+        )
+    
+    return allowed
+
+
 # Example usage
 if __name__ == "__main__":
     # Test RBAC

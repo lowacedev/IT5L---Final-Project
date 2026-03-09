@@ -1,6 +1,7 @@
 from app.exceptions import ValidationError, NotFoundError, DatabaseError
 from app.security.input_validator import InputValidator
 from app.security.password_manager import PasswordManager
+from app.utils.logger import SecurityAuditLogger
 import logging
 
 
@@ -64,6 +65,14 @@ class StaffController:
             # Get current user's username for logging
             performed_by = self.current_user.get('username') if self.current_user else None
             self.service.create_staff(full_name, username, password, role, performed_by=performed_by)
+            
+            # Log user action
+            SecurityAuditLogger.log_user_action(
+                performed_by or 'unknown',
+                'create_staff',
+                f'Created staff member: {username} (Role: {role})'
+            )
+            
             self.view.show_success("Staff member added successfully!")
             self.view.clear_form()
             self.load_data()
@@ -117,6 +126,14 @@ class StaffController:
             # Get current user's username for logging
             performed_by = self.current_user.get('username') if self.current_user else None
             self.service.update_staff(staff_id, full_name, username, password if password else "", role, performed_by=performed_by)
+            
+            # Log user action
+            SecurityAuditLogger.log_user_action(
+                performed_by or 'unknown',
+                'update_staff',
+                f'Updated staff member ID {staff_id}: {username} (Role: {role})'
+            )
+            
             self.view.show_success("Staff member updated successfully!")
             self.view.clear_form()
             self.load_data()
@@ -146,6 +163,14 @@ class StaffController:
             # Get current user's username for logging
             performed_by = self.current_user.get('username') if self.current_user else None
             self.service.delete_staff(staff_id, performed_by=performed_by)
+            
+            # Log user action
+            SecurityAuditLogger.log_user_action(
+                performed_by or 'unknown',
+                'delete_staff',
+                f'Deleted staff member ID: {staff_id}'
+            )
+            
             self.view.show_success("Staff member deleted successfully!")
             self.view.clear_form()
             self.load_data()

@@ -74,6 +74,9 @@ class ReportsService:
             """, (limit,))
             return cursor.fetchall()
         except Error as e:
+            # If tables don't exist, return empty list
+            if "doesn't exist" in str(e).lower() or "no table" in str(e).lower():
+                return []
             raise DatabaseError(f"Failed to get top selling items: {str(e)}")
         finally:
             if cursor:
@@ -99,6 +102,9 @@ class ReportsService:
             """)
             return cursor.fetchall()
         except Error as e:
+            # If table doesn't exist, return empty list
+            if "doesn't exist" in str(e).lower() or "no table" in str(e).lower():
+                return []
             raise DatabaseError(f"Failed to get inventory summary: {str(e)}")
         finally:
             if cursor:

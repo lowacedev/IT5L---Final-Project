@@ -1,5 +1,6 @@
 from app.exceptions import ValidationError, NotFoundError, DatabaseError
 import logging
+from app.utils.logger import SecurityAuditLogger
 
 
 class InventoryController:
@@ -116,6 +117,15 @@ class InventoryController:
 
         try:
             self.service.create_item(part_name, category, brand, model_number, quantity, cost_price, selling_price, supplier_id, performed_by=self.user.get('username') if self.user else None)
+            
+            # Log user action
+            username = self.user.get('username') if self.user else 'unknown'
+            SecurityAuditLogger.log_user_action(
+                username, 
+                'create_inventory_item', 
+                f'Created item: {part_name} (Qty: {quantity}, Price: {selling_price})'
+            )
+            
             self.view.show_success("Item added successfully!")
             self.view.clear_form()
             self.refresh_inventory()
@@ -195,6 +205,15 @@ class InventoryController:
 
         try:
             self.service.update_item(item_id, part_name, category, brand, model_number, quantity, cost_price, selling_price, supplier_id, performed_by=self.user.get('username') if self.user else None)
+            
+            # Log user action
+            username = self.user.get('username') if self.user else 'unknown'
+            SecurityAuditLogger.log_user_action(
+                username, 
+                'update_inventory_item', 
+                f'Updated item ID {item_id}: {part_name} (Qty: {quantity}, Price: {selling_price})'
+            )
+            
             self.view.show_success("Item updated successfully!")
             self.view.clear_form()
             self.refresh_inventory()
@@ -242,6 +261,15 @@ class InventoryController:
             user_id = self.user.get('id') if self.user else None
 
             self.service.record_stock_movement(item_id, 'IN', qty, reason, notes, user_id)
+            
+            # Log user action
+            username = self.user.get('username') if self.user else 'unknown'
+            SecurityAuditLogger.log_user_action(
+                username, 
+                'stock_in', 
+                f'Stock In - Item ID: {item_id}, Quantity: {qty}, Reason: {reason}'
+            )
+            
             self.clear_stock_in_form()
             self.refresh_inventory()
             self.refresh_stock_log()
@@ -277,6 +305,15 @@ class InventoryController:
             user_id = self.user.get('id') if self.user else None
 
             self.service.record_stock_movement(item_id, 'OUT', qty, reason, notes, user_id)
+            
+            # Log user action
+            username = self.user.get('username') if self.user else 'unknown'
+            SecurityAuditLogger.log_user_action(
+                username, 
+                'stock_out', 
+                f'Stock Out - Item ID: {item_id}, Quantity: {qty}, Reason: {reason}'
+            )
+            
             self.clear_stock_out_form()
             self.refresh_inventory()
             self.refresh_stock_log()

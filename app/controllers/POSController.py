@@ -1,4 +1,5 @@
 from app.exceptions import ValidationError, NotFoundError, DatabaseError
+from app.utils.logger import SecurityAuditLogger
 
 
 class POSController:
@@ -215,6 +216,16 @@ class POSController:
             self.cart.clear()
             self.view.clear_cart()
             self.load_all_items()
+            
+            # Log user action
+            username = self.user.get('username') if self.user else 'unknown'
+            num_items = len(self.cart) if self.cart else 0
+            SecurityAuditLogger.log_user_action(
+                username,
+                'pos_checkout',
+                f'Completed sale ID {sale_id}: {num_items} items, Total: Php {total:,.2f}, Payment: {payment_mode}'
+            )
+            
             self.view.show_success("Transaction completed successfully")
             
         except (ValidationError, NotFoundError, DatabaseError) as e:

@@ -19,13 +19,14 @@ class DatabaseLoggingHandler(logging.Handler):
         Initialize database logging handler.
         
         Args:
-            db_connection: Database connection object
+            db_connection: Database connection object (for config/validation only)
             queue_size: Size of the log queue for buffering
         """
         super().__init__()
-        self.db_connection = db_connection
+        self.db_connection = None  # Will create separate connection for logging
         self.log_queue = Queue(maxsize=queue_size)
         self.stop_event = threading.Event()
+        self._init_lock = threading.Lock()
         
         # Start background worker thread
         self.worker_thread = threading.Thread(target=self._process_logs, daemon=True)
@@ -34,11 +35,16 @@ class DatabaseLoggingHandler(logging.Handler):
     def emit(self, record: logging.LogRecord) -> None:
         """
         Emit a log record to database via queue.
+        Only logs INFO and above to reduce noise in audit logs.
         
         Args:
             record: LogRecord to emit
         """
         try:
+            # Filter out DEBUG level logs to reduce database noise
+            if record.levelno < logging.INFO:
+                return
+            
             # Parse log context
             log_data = self._parse_record(record)
             
@@ -226,30 +232,31 @@ class DatabaseLoggingHandler(logging.Handler):
     
     def _process_logs(self) -> None:
         """Process queued logs and write to database"""
+        import time
+        
         while not self.stop_event.is_set():
             try:
-                # Get log from queue with timeout
-                log_data = self.log_queue.get(timeout=5)
-                
-                # Write to appropriate database table based on event type
+                # Try to get log from queue with SHORT timeout (100ms) for responsive processing
+                log_data = self.log_queue.get(timeout=0.1)
                 self._write_to_database(log_data)
                 
             except Exception:
-                # Queue timeout or error - continue
-                pass
+                # Queue timeout - try again immediately
+                time.sleep(0.05)  # Small sleep to prevent busy-waiting
     
     def _write_to_database(self, log_data: Dict[str, Any]) -> None:
         """
         Write log data to appropriate database table.
+        Uses a separate database connection to avoid thread-safety issues.
         
         Args:
             log_data: Log data dictionary
         """
-        if not self.db_connection:
-            return
-        
         try:
-            cursor = self.db_connection.cursor()
+            # Create a separate connection for logging (thread-safe)
+            from app.core.db import get_db
+            db_connection = get_db()
+            cursor = db_connection.cursor()
             
             event_type = log_data['event_type']
             
@@ -265,13 +272,15 @@ class DatabaseLoggingHandler(logging.Handler):
             else:
                 self._write_general_audit_log(cursor, log_data)
             
-            self.db_connection.commit()
+            db_connection.commit()
             cursor.close()
+            db_connection.close()
             
         except Exception as e:
+            # Silently fail - logging should never crash the app
             try:
-                if self.db_connection:
-                    self.db_connection.rollback()
+                import sys
+                print(f"[WARNING] Database logging failed: {str(e)}", file=sys.stderr)
             except:
                 pass
     
@@ -279,43 +288,68 @@ class DatabaseLoggingHandler(logging.Handler):
         """Write authentication log"""
         status = "SUCCESS" if "SUCCESS" in log_data['message'] else "FAILED"
         
-        sql = """
-        INSERT INTO security_audit_logs 
-        (event_type, username, user_id, action, status, details, timestamp)
-        VALUES (%s, %s, %s, %s, %s, %s, %s)
-        """
-        
-        cursor.execute(sql, (
-            'AUTH',
-            log_data['username'],
-            log_data['user_id'],
-            'LOGIN',
-            status,
-            log_data['message'],
-            log_data['timestamp']
-        ))
+        # Handle case where user_id might be None
+        if log_data.get('user_id'):
+            sql = """
+            INSERT INTO security_audit_logs 
+            (event_type, username, user_id, action, status, details, timestamp)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
+            """
+            cursor.execute(sql, (
+                'AUTH',
+                log_data['username'],
+                log_data['user_id'],
+                'LOGIN',
+                status,
+                log_data['message'],
+                log_data['timestamp']
+            ))
+        else:
+            sql = """
+            INSERT INTO security_audit_logs 
+            (event_type, username, action, status, details, timestamp)
+            VALUES (%s, %s, %s, %s, %s, %s)
+            """
+            cursor.execute(sql, (
+                'AUTH',
+                log_data['username'],
+                'LOGIN',
+                status,
+                log_data['message'],
+                log_data['timestamp']
+            ))
     
     def _write_access_control_log(self, cursor, log_data: Dict[str, Any]) -> None:
-        """Write access control log"""
+        """Write access control log with optional user_id"""
+        allowed = "DENIED" not in log_data['message']
+        
+        # Handle case where user_id might be None - fallback to general audit log
+        if not log_data.get('user_id'):
+            self._write_general_audit_log(cursor, log_data)
+            return
+        
         sql = """
         INSERT INTO access_control_logs
         (username, user_id, resource, action, allowed, timestamp)
         VALUES (%s, %s, %s, %s, %s, %s)
         """
         
-        allowed = "DENIED" not in log_data['message']
-        
         cursor.execute(sql, (
             log_data['username'],
             log_data['user_id'],
-            log_data['resource'],
+            log_data.get('resource'),
             log_data['action'],
             allowed,
             log_data['timestamp']
         ))
     
     def _write_user_activity_log(self, cursor, log_data: Dict[str, Any]) -> None:
-        """Write user activity log"""
+        """Write user activity log - fallback to general audit log if user_id is missing"""
+        # If user_id is not available, write to general audit log instead
+        if not log_data.get('user_id'):
+            self._write_general_audit_log(cursor, log_data)
+            return
+        
         sql = """
         INSERT INTO user_activity_logs
         (username, user_id, action, module, details, timestamp)
@@ -332,42 +366,72 @@ class DatabaseLoggingHandler(logging.Handler):
         ))
     
     def _write_data_access_log(self, cursor, log_data: Dict[str, Any]) -> None:
-        """Write data access log"""
-        sql = """
-        INSERT INTO security_audit_logs
-        (event_type, username, user_id, resource, action, details, timestamp)
-        VALUES (%s, %s, %s, %s, %s, %s, %s)
-        """
-        
-        cursor.execute(sql, (
-            'DATA_ACCESS',
-            log_data['username'],
-            log_data['user_id'],
-            log_data['resource'],
-            log_data['action'],
-            log_data['message'],
-            log_data['timestamp']
-        ))
+        """Write data access log with optional user_id"""
+        # Handle case where user_id might be None
+        if log_data.get('user_id'):
+            sql = """
+            INSERT INTO security_audit_logs
+            (event_type, username, user_id, resource, action, details, timestamp)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
+            """
+            cursor.execute(sql, (
+                'DATA_ACCESS',
+                log_data['username'],
+                log_data['user_id'],
+                log_data.get('resource'),
+                log_data['action'],
+                log_data['message'],
+                log_data['timestamp']
+            ))
+        else:
+            sql = """
+            INSERT INTO security_audit_logs
+            (event_type, username, resource, action, details, timestamp)
+            VALUES (%s, %s, %s, %s, %s, %s)
+            """
+            cursor.execute(sql, (
+                'DATA_ACCESS',
+                log_data['username'],
+                log_data.get('resource'),
+                log_data['action'],
+                log_data['message'],
+                log_data['timestamp']
+            ))
     
     def _write_general_audit_log(self, cursor, log_data: Dict[str, Any]) -> None:
-        """Write general audit log"""
+        """Write general audit log with optional user_id"""
         status = "SUCCESS" if log_data['level'] in ['INFO', 'DEBUG'] else "FAILED"
         
-        sql = """
-        INSERT INTO security_audit_logs
-        (event_type, username, user_id, action, status, details, timestamp)
-        VALUES (%s, %s, %s, %s, %s, %s, %s)
-        """
-        
-        cursor.execute(sql, (
-            log_data['event_type'],
-            log_data['username'],
-            log_data['user_id'],
-            log_data['action'],
-            status,
-            log_data['message'],
-            log_data['timestamp']
-        ))
+        # Handle case where user_id might be None - log without it
+        if log_data.get('user_id'):
+            sql = """
+            INSERT INTO security_audit_logs
+            (event_type, username, user_id, action, status, details, timestamp)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
+            """
+            cursor.execute(sql, (
+                log_data['event_type'],
+                log_data['username'],
+                log_data['user_id'],
+                log_data['action'],
+                status,
+                log_data['message'],
+                log_data['timestamp']
+            ))
+        else:
+            sql = """
+            INSERT INTO security_audit_logs
+            (event_type, username, action, status, details, timestamp)
+            VALUES (%s, %s, %s, %s, %s, %s)
+            """
+            cursor.execute(sql, (
+                log_data['event_type'],
+                log_data['username'],
+                log_data['action'],
+                status,
+                log_data['message'],
+                log_data['timestamp']
+            ))
     
     def close(self) -> None:
         """Close handler and wait for queue to drain"""

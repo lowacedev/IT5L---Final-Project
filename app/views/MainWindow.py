@@ -1,3 +1,5 @@
+import traceback
+
 from PyQt6.QtWidgets import QMainWindow, QWidget, QHBoxLayout, QStackedWidget, QMessageBox, QPushButton, QVBoxLayout, QLabel
 from PyQt6.QtCore import Qt
 from app.views.Sidebar import Sidebar
@@ -13,6 +15,8 @@ from app.controllers.InventoryController import InventoryController
 from app.controllers.POSController import POSController
 from app.controllers.ReportsController import ReportsController
 from app.core.db import get_db
+from app.utils.BackupManager import BackupManager
+from PyQt6.QtCore import QThread, pyqtSignal
 
 class MainWindow(QMainWindow):
     def __init__(self, user=None, db_connection=None):
@@ -42,6 +46,9 @@ class MainWindow(QMainWindow):
 
     
         header_layout.addStretch()
+
+        # Backup button
+      
 
         self.btn_logout = QPushButton("Logout")
         self.btn_logout.setObjectName("logout_button")
@@ -78,6 +85,7 @@ class MainWindow(QMainWindow):
         self.sidebar.btn_suppliers.clicked.connect(self.load_suppliers)
         self.sidebar.btn_staff.clicked.connect(self.load_staff)
         self.sidebar.btn_audit_logs.clicked.connect(self.load_audit_logs)
+        self.sidebar.btn_backup.clicked.connect(self.load_backup_recovery)
 
         
         try:
@@ -282,13 +290,35 @@ class MainWindow(QMainWindow):
             label.setStyleSheet("color: #EF4444; font-size: 14px; padding: 20px;")
             self.stack.addWidget(label)
 
+    def load_backup_recovery(self):
+        """Load backup and recovery view"""
+        self.clear_stack()
+        self.sidebar.set_active("backup")
+        
+        if self.user.get('role') != 'admin':
+            QMessageBox.warning(self, "Access Denied", "Only administrators can access backup and recovery.")
+            return
+        
+        try:
+            from app.views.BackupRecoveryView import BackupRecoveryView
+            
+            db = self.db_connection or get_db()
+            view = BackupRecoveryView(db)
+            self.stack.addWidget(view)
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Failed to load backup recovery:\n{str(e)}")
+            label = QLabel("Backup & Recovery - Error")
+            label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            label.setStyleSheet("color: #EF4444; font-size: 14px; padding: 20px;")
+            self.stack.addWidget(label)
+
     def apply_role_permissions(self):
         
         role = self.user.get('role', 'admin')
         
         perms = {
            
-            'admin': ['dashboard', 'inventory', 'reports', 'suppliers', 'staff', 'audit_logs'],
+            'admin': ['dashboard', 'inventory', 'reports', 'suppliers', 'staff', 'audit_logs', 'backup'],
           
             'cashier': ['pos']
         }
@@ -302,11 +332,12 @@ class MainWindow(QMainWindow):
         self.sidebar.btn_suppliers.setVisible('suppliers' in allowed)
         self.sidebar.btn_staff.setVisible('staff' in allowed)
         self.sidebar.btn_audit_logs.setVisible('audit_logs' in allowed)
+        self.sidebar.btn_backup.setVisible('backup' in allowed)
 
     def _can_access(self, page_key: str) -> bool:
         role = self.user.get('role', 'cashier')
         perms = {
-            'admin': ['dashboard', 'inventory', 'reports', 'suppliers', 'staff', 'audit_logs'],
+            'admin': ['dashboard', 'inventory', 'reports', 'suppliers', 'staff', 'audit_logs', 'backup'],
             'cashier': ['pos']
         }
         allowed = perms.get(role, ['pos'])
@@ -350,5 +381,66 @@ class MainWindow(QMainWindow):
             import traceback
             traceback.print_exc()
             QApplication.quit()
-            traceback.print_exc()
-            QMessageBox.critical(self, "Logout Error", f"An error occurred during logout: {e}")
+
+    def create_backup(self):
+        """Create database backup in background thread"""
+        try:
+            # Disable button during backup
+            self.btn_backup.setEnabled(False)
+            self.btn_backup.setText("Backing up...")
+            
+            # Create backup in background thread
+            self.backup_thread = BackupThread(self.db_connection)
+            self.backup_thread.finished.connect(self._on_backup_finished)
+            self.backup_thread.error.connect(self._on_backup_error)
+            self.backup_thread.start()
+            
+        except Exception as e:
+            self.btn_backup.setEnabled(True)
+            self.btn_backup.setText("Backup Database")
+            QMessageBox.critical(self, "Backup Error", f"Failed to start backup:\n{str(e)}")
+
+    def _on_backup_finished(self, result):
+        """Handle successful backup"""
+        self.btn_backup.setEnabled(True)
+        self.btn_backup.setText("Backup Database")
+        
+        if result['success']:
+            backup_size_mb = result['backup_size'] / (1024 * 1024)
+            QMessageBox.information(
+                self, 
+                "Backup Successful", 
+                f"Database backed up successfully!\n\n"
+                f"File: {result['backup_path']}\n"
+                f"Size: {backup_size_mb:.2f} MB"
+            )
+        else:
+            QMessageBox.warning(self, "Backup Failed", f"Backup failed:\n{result['message']}")
+
+    def _on_backup_error(self, error_msg):
+        """Handle backup error"""
+        self.btn_backup.setEnabled(True)
+        self.btn_backup.setText("Backup Database")
+        QMessageBox.critical(self, "Backup Error", f"Backup error:\n{error_msg}")
+
+
+class BackupThread(QThread):
+    """Background thread for database backup"""
+    finished = pyqtSignal(dict)
+    error = pyqtSignal(str)
+    
+    def __init__(self, db_connection):
+        super().__init__()
+        self.db_connection = db_connection
+    
+    def run(self):
+        try:
+            result = BackupManager.create_backup(db_connection=self.db_connection)
+            self.finished.emit(result)
+        except Exception as e:
+            self.error.emit(str(e))
+
+
+class BackupRecoveryThread(QThread):
+    """Background thread for loading backup recovery view"""
+    pass

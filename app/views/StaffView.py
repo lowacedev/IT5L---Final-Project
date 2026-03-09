@@ -127,7 +127,7 @@ class StaffView(BaseView):
         if row < 0:
             return
         
-        staff_id = self.table.item(row, 0).text()
+       
         full_name = self.table.item(row, 1).text() if self.table.item(row,1) else ""
         username = self.table.item(row, 2).text()
         role = self.table.item(row, 3).text()

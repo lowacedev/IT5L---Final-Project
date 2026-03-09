@@ -1,6 +1,7 @@
 from app.exceptions import ValidationError, NotFoundError, DatabaseError
 import logging
 from app.utils.logger import SecurityAuditLogger
+from app.security.input_validator import InputValidator
 
 
 class InventoryController:
@@ -26,36 +27,87 @@ class InventoryController:
             self.view.stock_log_refresh_btn.clicked.connect(self.refresh_stock_log)
             self.view.stock_log_item_filter.currentIndexChanged.connect(self.refresh_stock_log)
 
-            self.logger.info("Connecting signals...")
+            # Load initial data without excessive logging
             self.refresh_inventory()
-            self.logger.info("Refreshing inventory...")
             self.refresh_stock_log()
-            self.logger.info("Refreshing stock log...")
         except Exception as e:
             self.logger.error(f"Error during InventoryController initialization: {str(e)}")
             import traceback
-            traceback.print_exc()
-            self.view.show_error(f"Failed to initialize inventory: {str(e)}")
+            full_traceback = traceback.format_exc()
+            self.logger.error(f"Full traceback:\n{full_traceback}")
+            print(f"ERROR: {str(e)}")
+            print(full_traceback)
+            # Don't show error dialog during initialization - just log it
+            # self.view.show_error(f"Failed to initialize inventory: {str(e)}")
 
     def refresh_inventory(self):
         try:
-            self.logger.info("Fetching all inventory items...")
             items = self.service.fetch_all()
-            self.logger.info(f"Fetched {len(items)} items, loading table...")
             self.view.load_table(items)
-            self.logger.info("Loading suppliers...")
             self.view.load_suppliers()
-            self.logger.info("Inventory refresh completed successfully")
         except Exception as e:
             self.logger.error(f"Error in refresh_inventory: {str(e)}")
             import traceback
-            traceback.print_exc()
-            self.view.show_error(f"Failed to load inventory: {str(e)}")
+            full_traceback = traceback.format_exc()
+            self.logger.error(f"Full traceback:\n{full_traceback}")
+            print(f"ERROR in refresh_inventory: {str(e)}")
+            print(full_traceback)
+
+    def _check_admin_permission(self, action):
+        """Check if user has admin permissions for the action."""
+        if self.user and self.user.get('role') != 'admin':
+            self.view.show_error(f"You do not have permission to {action}. Contact an admin.")
+            return False
+        return True
+
+    def _validate_inventory_fields(self, part_name, category, brand, model_number, quantity, cost_price, selling_price):
+        """Validate all inventory item fields and return error message if invalid."""
+        validations = [
+            (InputValidator.validate_product_name(part_name), "Product name"),
+            (InputValidator.validate_category(category) if category else (True, ""), "Category"),
+            (InputValidator.validate_brand(brand) if brand else (True, ""), "Brand"),
+            (InputValidator.validate_model_number(model_number) if model_number else (True, ""), "Model number"),
+            (InputValidator.validate_quantity(quantity), "Quantity"),
+            (InputValidator.validate_price(cost_price), "Cost price"),
+            (InputValidator.validate_price(selling_price), "Selling price"),
+        ]
+        
+        for (is_valid, msg), field_name in validations:
+            if not is_valid:
+                return f"{field_name}: {msg}"
+        return None
+
+    def _create_and_log_item(self, part_name, category, brand, model_number, quantity, cost_price, selling_price, supplier_id):
+        """Create item and log the action."""
+        self.service.create_item(
+            part_name, category, brand, model_number, quantity, cost_price, selling_price, supplier_id,
+            performed_by=self.user.get('username') if self.user else None
+        )
+        
+        username = self.user.get('username') if self.user else 'unknown'
+        SecurityAuditLogger.log_user_action(
+            username,
+            'create_inventory_item',
+            f'Created item: {part_name} (Qty: {quantity}, Price: {selling_price})'
+        )
+
+    def _update_and_log_item(self, item_id, part_name, category, brand, model_number, quantity, cost_price, selling_price, supplier_id):
+        """Update item and log the action."""
+        self.service.update_item(
+            item_id, part_name, category, brand, model_number, quantity, cost_price, selling_price, supplier_id,
+            performed_by=self.user.get('username') if self.user else None
+        )
+        
+        username = self.user.get('username') if self.user else 'unknown'
+        SecurityAuditLogger.log_user_action(
+            username,
+            'update_inventory_item',
+            f'Updated item ID {item_id}: {part_name} (Qty: {quantity}, Price: {selling_price})'
+        )
 
     def add_item(self):
         # Check permission for non-admin users
-        if self.user and self.user.get('role') != 'admin':
-            self.view.show_error("You do not have permission to add inventory items. Contact an admin.")
+        if not self._check_admin_permission("add inventory items"):
             return
         
         raw = self.view.collect_form_data()
@@ -69,63 +121,17 @@ class InventoryController:
             return
 
         # Validate input fields
-        from app.security.input_validator import InputValidator
-        
-        # Validate product name
-        is_valid, msg = InputValidator.validate_product_name(part_name)
-        if not is_valid:
-            self.view.show_error(f"Product name: {msg}")
-            return
-        
-        # Validate category
-        if category:  # Optional field
-            is_valid, msg = InputValidator.validate_category(category)
-            if not is_valid:
-                self.view.show_error(f"Category: {msg}")
-                return
-        
-        # Validate brand
-        if brand:  # Optional field
-            is_valid, msg = InputValidator.validate_brand(brand)
-            if not is_valid:
-                self.view.show_error(f"Brand: {msg}")
-                return
-        
-        # Validate model number
-        if model_number:  # Optional field
-            is_valid, msg = InputValidator.validate_model_number(model_number)
-            if not is_valid:
-                self.view.show_error(f"Model number: {msg}")
-                return
-        
-        # Validate quantity
-        is_valid, msg = InputValidator.validate_quantity(quantity)
-        if not is_valid:
-            self.view.show_error(f"Quantity: {msg}")
-            return
-        
-        # Validate prices
-        is_valid, msg = InputValidator.validate_price(cost_price)
-        if not is_valid:
-            self.view.show_error(f"Cost price: {msg}")
-            return
-        
-        is_valid, msg = InputValidator.validate_price(selling_price)
-        if not is_valid:
-            self.view.show_error(f"Selling price: {msg}")
+        validation_error = self._validate_inventory_fields(
+            part_name, category, brand, model_number, quantity, cost_price, selling_price
+        )
+        if validation_error:
+            self.view.show_error(validation_error)
             return
 
         try:
-            self.service.create_item(part_name, category, brand, model_number, quantity, cost_price, selling_price, supplier_id, performed_by=self.user.get('username') if self.user else None)
-            
-            # Log user action
-            username = self.user.get('username') if self.user else 'unknown'
-            SecurityAuditLogger.log_user_action(
-                username, 
-                'create_inventory_item', 
-                f'Created item: {part_name} (Qty: {quantity}, Price: {selling_price})'
+            self._create_and_log_item(
+                part_name, category, brand, model_number, quantity, cost_price, selling_price, supplier_id
             )
-            
             self.view.show_success("Item added successfully!")
             self.view.clear_form()
             self.refresh_inventory()
@@ -138,8 +144,7 @@ class InventoryController:
 
     def update_item(self):
         # Check permission for non-admin users
-        if self.user and self.user.get('role') != 'admin':
-            self.view.show_error("You do not have permission to update inventory items. Contact an admin.")
+        if not self._check_admin_permission("update inventory items"):
             return
         
         raw = self.view.collect_form_data(with_id=True)
@@ -154,66 +159,20 @@ class InventoryController:
             return
 
         # Validate input fields
-        from app.security.input_validator import InputValidator
-        
-        # Validate product name
-        is_valid, msg = InputValidator.validate_product_name(part_name)
-        if not is_valid:
-            self.view.show_error(f"Product name: {msg}")
-            return
-        
-        # Validate category
-        if category:
-            is_valid, msg = InputValidator.validate_category(category)
-            if not is_valid:
-                self.view.show_error(f"Category: {msg}")
-                return
-        
-        # Validate brand
-        if brand:
-            is_valid, msg = InputValidator.validate_brand(brand)
-            if not is_valid:
-                self.view.show_error(f"Brand: {msg}")
-                return
-        
-        # Validate model number
-        if model_number:
-            is_valid, msg = InputValidator.validate_model_number(model_number)
-            if not is_valid:
-                self.view.show_error(f"Model number: {msg}")
-                return
-        
-        # Validate quantity
-        is_valid, msg = InputValidator.validate_quantity(quantity)
-        if not is_valid:
-            self.view.show_error(f"Quantity: {msg}")
-            return
-        
-        # Validate prices
-        is_valid, msg = InputValidator.validate_price(cost_price)
-        if not is_valid:
-            self.view.show_error(f"Cost price: {msg}")
-            return
-        
-        is_valid, msg = InputValidator.validate_price(selling_price)
-        if not is_valid:
-            self.view.show_error(f"Selling price: {msg}")
+        validation_error = self._validate_inventory_fields(
+            part_name, category, brand, model_number, quantity, cost_price, selling_price
+        )
+        if validation_error:
+            self.view.show_error(validation_error)
             return
 
         if not self.view.ask_confirmation("Are you sure you want to update this item?"):
             return
 
         try:
-            self.service.update_item(item_id, part_name, category, brand, model_number, quantity, cost_price, selling_price, supplier_id, performed_by=self.user.get('username') if self.user else None)
-            
-            # Log user action
-            username = self.user.get('username') if self.user else 'unknown'
-            SecurityAuditLogger.log_user_action(
-                username, 
-                'update_inventory_item', 
-                f'Updated item ID {item_id}: {part_name} (Qty: {quantity}, Price: {selling_price})'
+            self._update_and_log_item(
+                item_id, part_name, category, brand, model_number, quantity, cost_price, selling_price, supplier_id
             )
-            
             self.view.show_success("Item updated successfully!")
             self.view.clear_form()
             self.refresh_inventory()
@@ -241,8 +200,7 @@ class InventoryController:
 
     def record_stock_in(self):
         # Check permission for non-admin users
-        if self.user and self.user.get('role') != 'admin':
-            self.view.show_error("You do not have permission to record stock movements. Contact an admin.")
+        if not self._check_admin_permission("record stock movements"):
             return
         
         try:
@@ -285,8 +243,7 @@ class InventoryController:
 
     def record_stock_out(self):
         # Check permission for non-admin users
-        if self.user and self.user.get('role') != 'admin':
-            self.view.show_error("You do not have permission to record stock movements. Contact an admin.")
+        if not self._check_admin_permission("record stock movements"):
             return
         
         try:
@@ -329,13 +286,9 @@ class InventoryController:
 
     def refresh_stock_log(self):
         try:
-            self.logger.info("Refreshing stock log...")
             selected_item_id = self.view.stock_log_item_filter.currentData()
-            self.logger.info(f"Selected item ID: {selected_item_id}")
             movements = self.service.get_stock_movements(item_id=selected_item_id, limit=100)
-            self.logger.info(f"Fetched {len(movements) if movements else 0} movements")
             self.view.load_stock_log_table(movements if movements else [])
-            self.logger.info("Stock log refresh completed successfully")
         except Exception as e:
             self.logger.error(f"Error in refresh_stock_log: {str(e)}")
             import traceback

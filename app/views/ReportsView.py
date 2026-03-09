@@ -8,11 +8,13 @@ from datetime import datetime, timedelta
 import csv
 from reportlab.lib.pagesizes import letter, landscape
 from reportlab.platypus import SimpleDocTemplate, Table as RLTable, TableStyle, Paragraph, Spacer, Image as RLImage, PageBreak
-from reportlab.lib import colors
 from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.lib.units import inch
 from app.views.BaseView import BaseView
 from app.utils.ProfessionalPDFReportGenerator import ProfessionalPDFReportGenerator
+from app.utils.logger import get_logger
+
+logger = get_logger(__name__)
 try:
     import openpyxl
     from openpyxl.utils import get_column_letter
@@ -374,16 +376,16 @@ class ReportsView(BaseView):
         # Connect export buttons to the handlers (call after controller sets up view)
         try:
             self.sales_export_pdf_btn.clicked.connect(self._handle_export_sales_pdf)
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning(f"Failed to connect sales export button: {e}")
         try:
             self.top_items_export_btn.clicked.connect(self._handle_export_top_items_pdf)
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning(f"Failed to connect top items export button: {e}")
         try:
             self.inventory_export_btn.clicked.connect(self._handle_export_inventory_pdf)
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning(f"Failed to connect inventory export button: {e}")
 
     def _choose_save_file(self, suggested_name):
         path, _ = QFileDialog.getSaveFileName(self, "Save PDF", suggested_name, "PDF Files (*.pdf)")
@@ -415,8 +417,9 @@ class ReportsView(BaseView):
                 if revenue_item:
                     revenue_text = revenue_item.text().replace('Php ', '').replace(',', '')
                     total_revenue += float(revenue_text)
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug(f"Failed to parse revenue row {r}: {e}")
+                continue
         
         metrics = {
             "Total Records": str(self.sales_detail_table.rowCount()),

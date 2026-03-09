@@ -18,6 +18,22 @@ from app.core.db import get_db
 from app.utils.BackupManager import BackupManager
 from PyQt6.QtCore import QThread, pyqtSignal
 
+# Style Constants
+ERROR_STYLE = "color: #EF4444; font-size: 14px; padding: 20px;"
+INFO_STYLE = "color: #6B7280; font-size: 16px; padding: 20px;"
+
+# Message Constants
+MSG_DATABASE_ERROR = "Database Error"
+MSG_ACCESS_DENIED = "Access Denied"
+MSG_POS_ACCESS_DENIED = "You do not have permission to access the Point of Sale."
+MSG_DB_CONNECTION_ERROR = "Could not connect to database:"
+MSG_INITIAL_LOAD_ERROR = "Failed to load initial page:"
+MSG_BACKUP_DATABASE = "Backup Database"
+MSG_BACKING_UP = "Backing up..."
+MSG_BACKUP_ERROR = "Backup Error"
+MSG_BACKUP_SUCCESS = "Backup complete! File saved to backups folder."
+MSG_BACKUP_FAILED = "Failed to start backup:"
+
 class MainWindow(QMainWindow):
     def __init__(self, user=None, db_connection=None):
         super().__init__()
@@ -31,7 +47,7 @@ class MainWindow(QMainWindow):
         try:
             with open("app/styles/styles.qss", "r") as f:
                 self.setStyleSheet(f.read())
-        except:
+        except FileNotFoundError:
             pass
 
         main_widget = QWidget()
@@ -103,12 +119,11 @@ class MainWindow(QMainWindow):
                 self.load_reports()
         except Exception as e:
             print(f"[MainWindow.__init__ ERROR] Failed to load initial page: {e}")
-            import traceback
             traceback.print_exc()
             # Show error message but don't crash
-            error_label = QLabel(f"Failed to load page: {str(e)}")
+            error_label = QLabel(MSG_INITIAL_LOAD_ERROR + str(e))
             error_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            error_label.setStyleSheet("color: #EF4444; font-size: 14px; padding: 20px;")
+            error_label.setStyleSheet(ERROR_STYLE)
             self.stack.addWidget(error_label)
 
     def clear_stack(self):
@@ -135,18 +150,18 @@ class MainWindow(QMainWindow):
             self.stack.addWidget(view)
         except Exception as e:
             from PyQt6.QtWidgets import QLabel, QMessageBox
-            QMessageBox.warning(self, "Database Error", 
-                               f"Could not connect to database:\n{str(e)}")
-            label = QLabel(f"Dashboard - Database Connection Error")
+            QMessageBox.warning(self, MSG_DATABASE_ERROR, 
+                               MSG_DB_CONNECTION_ERROR + "\n" + str(e))
+            label = QLabel("Dashboard - Database Connection Error")
             label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            label.setStyleSheet("color: #6B7280; font-size: 16px; padding: 20px;")
+            label.setStyleSheet(INFO_STYLE)
             self.stack.addWidget(label)
 
     def load_pos(self):
         self.clear_stack()
         self.sidebar.set_active("pos")
         if not self._can_access('pos'):
-            QMessageBox.warning(self, "Access Denied", "You do not have permission to access the Point of Sale.")
+            QMessageBox.warning(self, MSG_ACCESS_DENIED, MSG_POS_ACCESS_DENIED)
             return
         
         try:
@@ -166,21 +181,36 @@ class MainWindow(QMainWindow):
             self.stack.addWidget(label)
 
     def load_inventory(self):
+        print("[MainWindow] load_inventory: Starting...")
         self.clear_stack()
+        print("[MainWindow] load_inventory: Stack cleared")
         self.sidebar.set_active("inventory")
+        print("[MainWindow] load_inventory: Sidebar active")
+        
         if not self._can_access('inventory'):
+            print("[MainWindow] load_inventory: Access denied!")
             QMessageBox.warning(self, "Access Denied", "You do not have permission to access Inventory.")
             return
         
         try:
+            print("[MainWindow] load_inventory: Getting database connection...")
             db = get_db()
+            print("[MainWindow] load_inventory: Creating SupplierService...")
             supplier_service = SupplierService(db)
+            print("[MainWindow] load_inventory: Creating InventoryView...")
             view = InventoryView(supplier_service=supplier_service, user=self.user)
+            print("[MainWindow] load_inventory: Creating InventoryService...")
             service = InventoryService(db)
+            print("[MainWindow] load_inventory: Creating InventoryController...")
             self.inventory_controller = InventoryController(service, view, self.user)
-            
+            print("[MainWindow] load_inventory: Adding widget to stack...")
             self.stack.addWidget(view)
+            print("[MainWindow] load_inventory: Done!")
+            
         except Exception as e:
+            print(f"[MainWindow] load_inventory: EXCEPTION CAUGHT: {str(e)}")
+            import traceback
+            traceback.print_exc()
             from PyQt6.QtWidgets import QLabel, QMessageBox
             QMessageBox.critical(self, "Database Error", 
                                f"Could not connect to database:\n{str(e)}\n\nPlease check your database connection.")
@@ -355,7 +385,7 @@ class MainWindow(QMainWindow):
             db = get_db()
             user_service = SecureUserService(db)
             login_view = LoginView()
-            login_controller = LoginController(user_service, login_view)
+            LoginController(user_service, login_view)
             
             if login_view.exec() == QDialog.DialogCode.Accepted:
                 new_user = login_view.logged_in_user

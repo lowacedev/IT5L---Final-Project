@@ -212,7 +212,7 @@ class LoginController:
             # Start worker thread
             self.logger.info(f"[MAIN] Starting worker thread for {username}")
             self.auth_worker.start()
-            self.logger.info(f"[MAIN] Worker thread started")
+            self.logger.info("[MAIN] Worker thread started")
             
         except Exception as e:
             self.logger.error(f"Unexpected error starting login: {str(e)}")
@@ -257,7 +257,7 @@ class LoginController:
             
             try:
                 username, _, _ = self.view.collect_form_data()
-            except:
+            except Exception:
                 username = "unknown"
             
             auth_logger = logging.getLogger('AUTH')

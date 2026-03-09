@@ -182,7 +182,7 @@ class StaffService:
         except Error as e:
             raise DatabaseError(f"Failed to get staff: {str(e)}")
 
-    def _validate_staff_data(self, full_name, username, password, role, allow_empty_password=False):
+    def _validate_staff_data(self, full_name, username, password, allow_empty_password=False):
         """Validate staff data before creating/updating"""
         if not username or not username.strip():
             raise ValidationError("Username is required")

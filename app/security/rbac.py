@@ -6,6 +6,13 @@ Manages user roles, permissions, and access control.
 from typing import List, Set, Dict, Optional
 from enum import Enum
 from dataclasses import dataclass
+from app.utils.logger import get_logger, SecurityAuditLogger
+
+logger = get_logger(__name__)
+
+# Permission descriptions (constants to avoid duplication)
+PERM_VIEW_INVENTORY = "View inventory"
+
 
 class UserRole(Enum):
     """Available user roles"""
@@ -40,7 +47,7 @@ class RBACManager:
             
             # Inventory Management
             Permission("manage_inventory", "Create, edit, delete inventory items", "inventory", "manage"),
-            Permission("view_inventory", "View inventory", "inventory", "read"),
+            Permission("view_inventory", PERM_VIEW_INVENTORY, "inventory", "read"),
             Permission("adjust_stock", "Adjust inventory stock", "inventory", "adjust_stock"),
             
             # Sales
@@ -58,22 +65,6 @@ class RBACManager:
             Permission("user_audit", "View user audit logs", "audit", "read"),
         },
         
-        UserRole.MANAGER: {
-            # Inventory
-            Permission("manage_inventory", "Create, edit inventory", "inventory", "manage"),
-            Permission("view_inventory", "View inventory", "inventory", "read"),
-            Permission("adjust_stock", "Adjust inventory stock", "inventory", "adjust_stock"),
-            
-            # Sales
-            Permission("view_all_sales", "View all sales", "sales", "read_all"),
-            
-            # Reports
-            Permission("view_reports", "View reports", "reports", "read"),
-            
-            # Users (limited)
-            Permission("view_users", "View users", "users", "read"),
-            Permission("reset_password", "Reset user passwords", "users", "reset_password"),
-        },
         
         UserRole.CASHIER: {
             # Sales
@@ -82,7 +73,7 @@ class RBACManager:
             Permission("refund_sale", "Refund sales", "sales", "refund"),
             
             # Inventory (read-only)
-            Permission("view_inventory", "View inventory", "inventory", "read"),
+            Permission("view_inventory", PERM_VIEW_INVENTORY, "inventory", "read"),
         },
     }
     
@@ -288,10 +279,15 @@ def check_access_with_logging(user_role: UserRole, resource: str, action: str, u
     allowed = RBACManager.has_resource_action(user_role, resource, action)
     
     if not allowed:
-        # Log denied access attempt
-        from app.utils.logger import SecurityAuditLogger
+        # Determine identifier for logging
+        if username:
+            identifier = username
+        elif user_id:
+            identifier = f"user_{user_id}"
+        else:
+            identifier = "unknown"
         SecurityAuditLogger.log_unauthorized_access_attempt(
-            username or f"user_{user_id}" or "unknown",
+            identifier,
             resource,
             action
         )

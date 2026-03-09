@@ -49,7 +49,7 @@ class PasswordManager:
                 from app.utils.logger import get_logger
                 logger = get_logger('PASSWORD_CHANGE')
                 logger.error(f"Password verification error: {e}")
-            except:
+            except Exception:
                 pass
             return False
     
@@ -107,8 +107,7 @@ class PasswordManager:
 
 # Example usage
 if __name__ == "__main__":
-    # Test password hashing
-    test_password = "SecurePass123!"
+    test_password = "Test@1234"
     
     # Validate
     is_valid, msg = PasswordManager.validate_password_strength(test_password)

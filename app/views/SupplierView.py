@@ -132,7 +132,7 @@ class SupplierView(BaseView):
         if row < 0:
             return
         
-        supplier_id = self.table.item(row, 0).text()
+      
         name = self.table.item(row, 1).text()
         contact = self.table.item(row, 2).text()
         email = self.table.item(row, 3).text()

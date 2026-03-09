@@ -1,7 +1,7 @@
 import mysql.connector
 from mysql.connector import Error
 from app.security.config import SecurityConfig
-from app.utils.logger import get_logger, SecurityAuditLogger
+from app.utils.logger import get_logger
 
 logger = get_logger(__name__)
 
@@ -63,7 +63,7 @@ def test_connection():
             print("Database connection test FAILED: No response from SELECT 1")
             return False
         
-        print(f"Database connection test: SUCCESS")
+        print("Database connection test: SUCCESS")
         
         # Check tables exist
         cursor = db.cursor()
@@ -94,7 +94,7 @@ def is_database_responsive(timeout_seconds=5):
             cursor.close()
             db.close()
             result[0] = True
-        except:
+        except Exception:
             result[0] = False
     
     thread = threading.Thread(target=check, daemon=True)

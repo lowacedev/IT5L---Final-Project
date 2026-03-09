@@ -36,12 +36,15 @@ class BaseView(QWidget):
         return reply == QMessageBox.StandardButton.Yes
     
     def clear_form(self):
+        # Subclasses override this method to implement form clearing
         pass
     
     def disable_form(self):
+        # Subclasses override this method to implement form disabling
         pass
     
     def enable_form(self):
+        # Subclasses override this method to implement form enabling
         pass
     
     def is_valid(self) -> bool:

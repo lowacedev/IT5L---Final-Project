@@ -38,25 +38,21 @@ def main():
         
         user_service = SecureUserService(db)
         login_view = LoginView()
-        login_controller = LoginController(user_service, login_view)
+        LoginController(user_service, login_view)
         
         if login_view.exec() == LoginView.DialogCode.Accepted:
             user = login_view.logged_in_user
-            
-  
             window = MainWindow(user, db)
             window.show()
-            
             sys.exit(app.exec())
         else:
             sys.exit(0)
             
     except Exception as e:
         print(f"Error: {e}")
-   
-        window = MainWindow()
-        window.show()
-        sys.exit(app.exec())
+        import traceback
+        traceback.print_exc()
+        sys.exit(1)
 
 if __name__ == "__main__":
     main()

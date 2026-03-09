@@ -21,58 +21,58 @@ class DashboardController:
 
         self.refresh()
 
+    def _extract_daily_summary(self, today):
+        """Extract daily summary data with defaults."""
+        data = self.service.get_daily_summary(today)
+        if data:
+            total_transactions = data[0] if data[0] is not None else 0
+            total_revenue = float(data[1]) if data[1] is not None else 0.0
+        else:
+            total_transactions = 0
+            total_revenue = 0.0
+        return total_transactions, total_revenue
+
+    def _update_kpi_labels(self, total_revenue, total_transactions, total_products):
+        """Update KPI labels in the view."""
+        self._safe_set_text(self.view.kpi_sales_label, f"Php {total_revenue:,.2f}")
+        self._safe_set_text(self.view.kpi_transactions_label, str(total_transactions))
+        self._safe_set_text(self.view.kpi_total_products_label, str(total_products))
+
+    def _safe_set_text(self, widget, text):
+        """Safely set widget text, suppressing errors."""
+        try:
+            widget.setText(text)
+        except Exception:
+            pass
+
+    def _load_charts(self):
+        """Load sales and inventory charts with period selection."""
+        try:
+            sel = getattr(self.view, 'period_selector', None)
+            period = sel.currentText().lower() if sel else None
+            
+            self._safe_load_chart(lambda: self.view.load_sales_chart(days=60, period=period))
+            self._safe_load_chart(lambda: self.view.load_top_items_chart())
+        except Exception:
+            pass
+
+    def _safe_load_chart(self, chart_loader):
+        """Load a chart, suppressing errors."""
+        try:
+            chart_loader()
+        except Exception:
+            pass
+
     def refresh(self):
         try:
             today = datetime.now().strftime("%Y-%m-%d")
-            yesterday = (datetime.now() - timedelta(days=1)).strftime("%Y-%m-%d")
             
-            data = self.service.get_daily_summary(today)
-            if data:
-                total_transactions = data[0] if data[0] is not None else 0
-                total_revenue = float(data[1]) if data[1] is not None else 0.0
-            else:
-                total_transactions = 0
-                total_revenue = 0.0
-
-            yesterday_revenue = self.service.get_daily_revenue(yesterday)
-
-            if yesterday_revenue > 0:
-                percentage_change = ((total_revenue - yesterday_revenue) / yesterday_revenue) * 100
-            else:
-                percentage_change = 100.0 if total_revenue > 0 else 0.0
-
+            total_transactions, total_revenue = self._extract_daily_summary(today)
             inventory = self.service.get_inventory_summary()
             total_products = len(inventory) if inventory else 0
 
-            try:
-                self.view.kpi_sales_label.setText(f"Php {total_revenue:,.2f}")
-            except Exception:
-                pass
-            
-            try:
-                self.view.kpi_transactions_label.setText(str(total_transactions))
-            except Exception:
-                pass
-            try:
-                self.view.kpi_total_products_label.setText(str(total_products))
-            except Exception:
-                pass
-
-            try:
-                sel = getattr(self.view, 'period_selector', None)
-                period = None
-                if sel:
-                    period = sel.currentText().lower()
-                try:
-                    self.view.load_sales_chart(days=60, period=period)
-                except Exception:
-                    pass
-                try:
-                    self.view.load_top_items_chart()
-                except Exception:
-                    pass
-            except Exception:
-                pass
+            self._update_kpi_labels(total_revenue, total_transactions, total_products)
+            self._load_charts()
 
         except DatabaseError as e:
             self.view.show_error(f"Failed to refresh dashboard: {str(e)}")

@@ -152,7 +152,7 @@ class ReceiptDisplayDialog(QDialog):
             )
             
             if filename:
-                pdf_buffer, pdf_filename = ReceiptGenerator.generate_pdf_receipt(
+                pdf_buffer, _ = ReceiptGenerator.generate_pdf_receipt(
                     sale_id=self.sale_id,
                     items=self.items,
                     subtotal=self.subtotal,

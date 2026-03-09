@@ -4,7 +4,6 @@ Handles user authentication, registration, and password management with security
 """
 
 from datetime import datetime, timedelta
-import hashlib
 import secrets
 from app.security.password_manager import PasswordManager
 from app.security.input_validator import InputValidator
@@ -26,7 +25,7 @@ class LoginAttemptTracker:
             # Check if connection is still valid
             try:
                 if not self.db.is_connected():
-                    logger.warning(f"record_attempt: Connection not connected, reconnecting...")
+                    logger.warning("record_attempt: Connection not connected, reconnecting...")
                     self.db.reconnect()
             except Exception as e:
                 logger.warning(f"record_attempt: Connection check failed: {str(e)}, getting new connection")
@@ -68,7 +67,7 @@ class LoginAttemptTracker:
             logger.error(f"Failed to record login attempt for {username}: {str(e)}")
             try:
                 self.db.rollback()
-            except:
+            except Exception:
                 pass
     
     def get_failed_attempts(self, username: str, minutes: int = 60) -> int:
@@ -94,16 +93,16 @@ class LoginAttemptTracker:
             logger.info(f"get_failed_attempts: Cursor created, type={type(cursor)}")
             
             cutoff_time = datetime.now() - timedelta(minutes=minutes)
-            logger.info(f"get_failed_attempts: Cutoff time calculated")
+            logger.info("get_failed_attempts: Cutoff time calculated")
             
             query = """
                 SELECT COUNT(*) as attempt_count
                 FROM login_attempts
                 WHERE username = %s AND success = 0 AND attempt_time > %s
             """
-            logger.info(f"get_failed_attempts: Executing query")
+            logger.info("get_failed_attempts: Executing query")
             cursor.execute(query, (username, cutoff_time))
-            logger.info(f"get_failed_attempts: Query executed")
+            logger.info("get_failed_attempts: Query executed")
             
             result = cursor.fetchone()
             logger.info(f"get_failed_attempts: fetchone() returned, result={result}, type={type(result)}")
@@ -125,7 +124,7 @@ class LoginAttemptTracker:
                     count = int(result)
                     logger.info(f"get_failed_attempts: Returning count={count} from direct conversion")
                     return count
-            logger.info(f"get_failed_attempts: Result is None, returning 0")
+            logger.info("get_failed_attempts: Result is None, returning 0")
             return 0
         except Exception as e:
             logger.error(f"Failed to get login attempts for {username}: {str(e)}")
@@ -136,7 +135,7 @@ class LoginAttemptTracker:
             if cursor:
                 try:
                     cursor.close()
-                    logger.info(f"get_failed_attempts: Cursor closed")
+                    logger.info("get_failed_attempts: Cursor closed")
                 except Exception as e:
                     logger.error(f"get_failed_attempts: Error closing cursor: {str(e)}")
     
@@ -172,7 +171,7 @@ class LoginAttemptTracker:
             logger.error(f"Failed to set locked_until for {username}: {str(e)}")
             try:
                 self.db.rollback()
-            except:
+            except Exception:
                 pass
 
 
@@ -182,7 +181,7 @@ class SessionManager:
     def __init__(self, db):
         self.db = db
     
-    def create_session(self, user_id: int, username: str, ip_address: str = "127.0.0.1", user_agent: str = None) -> str:
+    def create_session(self, user_id: int, username: str, ip_address: str = "127.0.0.1", user_agent: str = None) -> "str | None":
         """
         Create a new user session in database.
         
@@ -193,7 +192,7 @@ class SessionManager:
             user_agent: Client user agent
             
         Returns:
-            session_token: Generated session token
+            session_token: Generated session token or None if failed
         """
         try:
             # Generate unique session token
@@ -216,9 +215,9 @@ class SessionManager:
             logger.error(f"Failed to create session for user {user_id}: {str(e)}")
             try:
                 self.db.rollback()
-            except:
+            except Exception:
                 pass
-            return None
+            return None  # type: ignore
     
     def close_session(self, user_id: int, session_token: str) -> bool:
         """
@@ -243,14 +242,14 @@ class SessionManager:
             cursor.close()
             
             logger.info(f"Session closed for user ID: {user_id}")
-            SecurityAuditLogger.log_user_action('user', 'session_closed', f'Session logged out')
+            SecurityAuditLogger.log_user_action('user', 'session_closed', 'Session logged out')
             
             return True
         except Exception as e:
             logger.error(f"Failed to close session for user {user_id}: {str(e)}")
             try:
                 self.db.rollback()
-            except:
+            except Exception:
                 pass
             return False
     
@@ -280,7 +279,88 @@ class SecureUserService:
         self.login_tracker = LoginAttemptTracker(db)
         self.session_manager = SessionManager(db)
     
-    def authenticate(self, username: str, password: str, ip_address: str = "127.0.0.1", user_agent: str = None) -> dict:
+    def _validate_auth_inputs(self, username: str, password: str) -> "bool":
+        """Validate username and password inputs. Returns True if valid."""
+        logger.info(f"[AUTH] Step 1: Validating username format for {username}")
+        is_valid, _ = InputValidator.validate_username(username)
+        if not is_valid:
+            logger.warning(f"Invalid username format: {username}")
+            return False
+        
+        if not password:
+            logger.warning(f"Empty password attempt for user: {username}")
+            self.login_tracker.record_attempt(username, False, reason="Empty password")
+            return False
+        
+        return True
+    
+    def _check_account_locked(self, username: str) -> "bool":
+        """Check if account is locked. Returns True if locked."""
+        logger.info(f"[AUTH] Step 2: Checking if account is locked for {username}")
+        from app.security.config import SecurityConfig
+        lockout_minutes = SecurityConfig.LOGIN_LOCKOUT_DURATION // 60
+        
+        if self.login_tracker.is_account_locked(
+            username,
+            SecurityConfig.MAX_LOGIN_ATTEMPTS,
+            lockout_minutes
+        ):
+            self.login_tracker.record_attempt(username, False, reason="Account locked")
+            return True
+        
+        return False
+    
+    def _fetch_user_from_db(self, username: str) -> "dict | None":
+        """Fetch user data from database."""
+        logger.info(f"[AUTH] Step 3: Querying database for user {username}")
+        cursor = None
+        try:
+            cursor = self.db.cursor(dictionary=True)
+            query = """
+                SELECT id, username, full_name, role, password, is_active, created_at
+                FROM users
+                WHERE username = %s
+            """
+            cursor.execute(query, (username,))
+            logger.info(f"[AUTH] Step 3b: Query executed for {username}, fetching result")
+            result = cursor.fetchone()
+            logger.info("[AUTH] Step 3c: Result fetched, closing cursor")
+            return result
+        finally:
+            if cursor:
+                try:
+                    cursor.close()
+                    logger.info("[AUTH] Step 3d: Cursor closed, proceeding with password check")
+                except Exception as e:
+                    logger.error(f"[AUTH] Error closing cursor: {str(e)}")
+    
+    def _process_successful_login(self, result: dict, username: str, ip_address: str, user_agent: str) -> "dict | None":
+        """Process successful login and create session."""
+        if result['is_active']:
+            logger.info(f"[AUTH] Step 5: User account is active, creating session for {username}")
+            self.login_tracker.record_attempt(username, True, reason="Successful login")
+            SecurityAuditLogger.log_login_attempt(username, True, ip_address=ip_address)
+            logger.info(f"User {username} logged in successfully")
+            
+            session_token = self.session_manager.create_session(
+                result['id'], username, ip_address, user_agent
+            )
+            logger.info(f"[AUTH] Step 5b: Session created, token={'***' if session_token else 'None'}")
+            
+            return {
+                'id': result['id'],
+                'username': result['username'],
+                'full_name': result['full_name'],
+                'role': result['role'],
+                'session_token': session_token,
+            }
+        else:
+            self.login_tracker.record_attempt(username, False, reason="Account inactive")
+            SecurityAuditLogger.log_login_attempt(username, False, reason="Account inactive")
+            logger.warning(f"Login attempt for inactive account: {username}")
+            return None
+    
+    def authenticate(self, username: str, password: str, ip_address: str = "127.0.0.1", user_agent: str = None) -> "dict | None":
         """
         Authenticate user with username and password.
         Uses parameterized queries to prevent SQL injection.
@@ -298,109 +378,36 @@ class SecureUserService:
         start_time = time.time()
         
         try:
-            # Validate inputs
-            logger.info(f"[AUTH] Step 1: Validating username format for {username}")
-            is_valid, msg = InputValidator.validate_username(username)
-            if not is_valid:
-                logger.warning(f"Invalid username format: {username}")
-                return None
+            if not self._validate_auth_inputs(username, password):
+                return None  # type: ignore
             
-            if not password:
-                logger.warning(f"Empty password attempt for user: {username}")
-                self.login_tracker.record_attempt(username, False, reason="Empty password")
-                return None
+            if self._check_account_locked(username):
+                return None  # type: ignore
             
-            # Check if account is locked
-            logger.info(f"[AUTH] Step 2: Checking if account is locked for {username}")
-            from app.security.config import SecurityConfig
-            lockout_minutes = SecurityConfig.LOGIN_LOCKOUT_DURATION // 60
-            
-            if self.login_tracker.is_account_locked(
-                username,
-                SecurityConfig.MAX_LOGIN_ATTEMPTS,
-                lockout_minutes
-            ):
-                self.login_tracker.record_attempt(username, False, reason="Account locked")
-                return None
-            
-            # Query database for user
-            logger.info(f"[AUTH] Step 3: Querying database for user {username}")
-            cursor = None
-            try:
-                cursor = self.db.cursor(dictionary=True)
-                
-                query = """
-                    SELECT id, username, full_name, role, password, is_active, created_at
-                    FROM users
-                    WHERE username = %s
-                """
-                
-                cursor.execute(query, (username,))
-                logger.info(f"[AUTH] Step 3b: Query executed for {username}, fetching result")
-                result = cursor.fetchone()
-                logger.info(f"[AUTH] Step 3c: Result fetched, closing cursor")
-            finally:
-                if cursor:
-                    try:
-                        cursor.close()
-                        logger.info(f"[AUTH] Step 3d: Cursor closed, proceeding with password check")
-                    except Exception as e:
-                        logger.error(f"[AUTH] Error closing cursor: {str(e)}")
+            result = self._fetch_user_from_db(username)
             
             if result:
-                logger.info(f"[AUTH] Step 4: User found, verifying password")
-                # Verify password
-                logger.info(f"[AUTH] Step 4a: Starting bcrypt password verification")
+                logger.info("[AUTH] Step 4: User found, verifying password")
+                logger.info("[AUTH] Step 4a: Starting bcrypt password verification")
                 password_valid = PasswordManager.verify_password(password, result['password'])
                 logger.info(f"[AUTH] Step 4b: Password verification completed, result={password_valid}")
                 
                 if password_valid:
-                    if result['is_active']:
-                        logger.info(f"[AUTH] Step 5: User account is active, creating session for {username}")
-                        # Login successful
-                        self.login_tracker.record_attempt(username, True, reason="Successful login")
-                        SecurityAuditLogger.log_login_attempt(username, True, ip_address=ip_address)
-                        logger.info(f"User {username} logged in successfully")
-                        
-                        # Create session
-                        logger.info(f"[AUTH] Step 5a: Creating session for user {username}")
-                        session_token = self.session_manager.create_session(
-                            result['id'], 
-                            username, 
-                            ip_address, 
-                            user_agent
-                        )
-                        logger.info(f"[AUTH] Step 5b: Session created, token={session_token[:20] if session_token else 'None'}...")
-                        
+                    auth_result = self._process_successful_login(result, username, ip_address, user_agent)
+                    if auth_result:
                         elapsed = time.time() - start_time
                         logger.info(f"[AUTH] Authentication completed for {username} in {elapsed:.2f}s")
-                        
-                        # Return user data with session token (without password)
-                        return {
-                            'id': result['id'],
-                            'username': result['username'],
-                            'full_name': result['full_name'],
-                            'role': result['role'],
-                            'session_token': session_token,
-                        }
-                    else:
-                        # Account is inactive
-                        self.login_tracker.record_attempt(username, False, reason="Account inactive")
-                        SecurityAuditLogger.log_login_attempt(username, False, reason="Account inactive")
-                        logger.warning(f"Login attempt for inactive account: {username}")
-                        return None
+                    return auth_result
                 else:
-                    # Password mismatch
                     self.login_tracker.record_attempt(username, False, reason="Invalid password")
                     SecurityAuditLogger.log_login_attempt(username, False, reason="Invalid password")
                     logger.warning(f"Invalid password attempt for user: {username}")
-                    return None
+                    return None  # type: ignore
             else:
-                # User not found
                 self.login_tracker.record_attempt(username, False, reason="User not found")
                 SecurityAuditLogger.log_login_attempt(username, False, reason="User not found")
                 logger.warning(f"Login attempt for non-existent user: {username}")
-                return None
+                return None  # type: ignore
             
         except Exception as e:
             elapsed = time.time() - start_time
@@ -408,7 +415,7 @@ class SecureUserService:
             SecurityAuditLogger.log_system_error("AUTH_ERROR", str(e), username)
             import traceback
             logger.error(f"Traceback: {traceback.format_exc()}")
-            return None
+            return None  # type: ignore
     
     def register_user(self, username: str, password: str, full_name: str, role: str = 'cashier') -> dict:
         """
@@ -529,7 +536,7 @@ class SecureUserService:
             SecurityAuditLogger.log_system_error("PASSWORD_CHANGE_ERROR", str(e), username)
             return {'success': False, 'message': 'Password change failed'}
     
-    def get_user_by_id(self, user_id: int) -> dict:
+    def get_user_by_id(self, user_id: int) -> "dict | None":
         """Get user data by ID using parameterized query"""
         try:
             cursor = self.db.cursor(dictionary=True)
@@ -540,7 +547,7 @@ class SecureUserService:
             return result
         except Exception as e:
             logger.error(f"Error fetching user {user_id}: {str(e)[:100]}")
-            return None
+            return None  # type: ignore
     
     def get_all_users(self) -> list:
         """Get all users (admin only - should be checked by controller)"""

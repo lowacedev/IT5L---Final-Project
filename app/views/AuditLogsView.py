@@ -210,8 +210,9 @@ class AuditLogsView(BaseView):
         try:
             cursor = self.db_connection.cursor(dictionary=True)
             
-            # Build query
-            sql = "SELECT * FROM security_audit_logs WHERE 1=1"
+            # Build query - exclude non-security logs
+            sql = """SELECT * FROM security_audit_logs WHERE 1=1 
+                     AND event_type NOT IN ('INVENTORYCONTROLLER', 'SUPPLIERSERVICE', 'INVENTORYSERVICE')"""
             params = []
             
             # Event type filter

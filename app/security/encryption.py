@@ -5,7 +5,6 @@ Implements AES encryption for sensitive data.
 
 from cryptography.fernet import Fernet
 import base64
-import os
 from app.security.config import SecurityConfig
 
 class DataEncryption:
@@ -17,24 +16,28 @@ class DataEncryption:
             # Use the encryption key from config
             key_string = SecurityConfig.ENCRYPTION_KEY
             
-            # Convert string key to Fernet-compatible key (32 bytes, base64 encoded)
+            # Check if key is already a valid Fernet key (base64 encoded)
             if isinstance(key_string, str):
-                # Pad or truncate to 32 bytes, then base64 encode
-                key_bytes = key_string.encode()[:32]
-                key_bytes = key_bytes.ljust(32, b'\0')  # Pad with null bytes if needed
-                self.key = base64.urlsafe_b64encode(key_bytes)
+                try:
+                    # Try to use it directly as a Fernet key
+                    self.cipher = Fernet(key_string.encode())
+                    self.key = key_string.encode()
+                except (ValueError, TypeError):
+                    # If not a valid Fernet key, derive one from the string
+                    key_bytes = key_string.encode()[:32]
+                    key_bytes = key_bytes.ljust(32, b'\0')  # Pad with null bytes if needed
+                    self.key = base64.urlsafe_b64encode(key_bytes)
+                    self.cipher = Fernet(self.key)
             else:
                 self.key = key_string
-            
-            # Create cipher
-            self.cipher = Fernet(self.key)
+                self.cipher = Fernet(self.key)
         except Exception as e:
             # Log locally to avoid circular imports
             try:
                 from app.utils.logger import get_logger
                 logger = get_logger(__name__)
                 logger.error(f"Encryption initialization error: {e}")
-            except:
+            except ImportError:
                 pass
             raise
     
@@ -49,11 +52,15 @@ class DataEncryption:
         Returns:
             Fernet: Cipher object
         """
-        # Simple key derivation from password
-        key_bytes = password.encode()[:32]
-        key_bytes = key_bytes.ljust(32, b'\0')
-        key = base64.urlsafe_b64encode(key_bytes)
-        return Fernet(key)
+        # Check if password is already a valid Fernet key
+        try:
+            return Fernet(password.encode())
+        except (ValueError, TypeError):
+            # Otherwise derive a key from the password
+            key_bytes = password.encode()[:32]
+            key_bytes = key_bytes.ljust(32, b'\0')
+            key = base64.urlsafe_b64encode(key_bytes)
+            return Fernet(key)
     
     def encrypt(self, data: str) -> str:
         """
@@ -76,7 +83,7 @@ class DataEncryption:
                 from app.utils.logger import get_logger
                 logger = get_logger(__name__)
                 logger.error(f"Encryption error: {e}")
-            except:
+            except ImportError:
                 pass
             raise
     
@@ -99,7 +106,7 @@ class DataEncryption:
                 from app.utils.logger import get_logger
                 logger = get_logger(__name__)
                 logger.error(f"Decryption error: {e}")
-            except:
+            except ImportError:
                 pass
             raise
     
@@ -142,7 +149,7 @@ class DataEncryption:
                         from app.utils.logger import get_logger
                         logger = get_logger(__name__)
                         logger.warning(f"Could not decrypt field {field}: {e}")
-                    except:
+                    except ImportError:
                         pass
         return decrypted_data
 

@@ -3,6 +3,12 @@ from PyQt6.QtWidgets import QDialog, QLabel, QLineEdit, QPushButton, QVBoxLayout
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QPixmap
 import os
+import logging
+
+logger = logging.getLogger(__name__)
+
+# Style constants
+LABEL_STYLE = "font-weight: 600; color: #374151;"
 
 
 class LoginView(QDialog):
@@ -51,13 +57,13 @@ class LoginView(QDialog):
         form_layout.setSpacing(12)
         
         self.lbl_username = QLabel("Username")
-        self.lbl_username.setStyleSheet("font-weight: 600; color: #374151;")
+        self.lbl_username.setStyleSheet(LABEL_STYLE)
         self.txt_username = QLineEdit()
         self.txt_username.setPlaceholderText("Enter your username")
         self.txt_username.setMinimumHeight(40)
         
         self.lbl_password = QLabel("Password")
-        self.lbl_password.setStyleSheet("font-weight: 600; color: #374151;")
+        self.lbl_password.setStyleSheet(LABEL_STYLE)
         self.txt_password = QLineEdit()
         self.txt_password.setPlaceholderText("Enter your password")
         self.txt_password.setEchoMode(QLineEdit.EchoMode.Password)
@@ -70,7 +76,7 @@ class LoginView(QDialog):
         
         # CAPTCHA Section
         captcha_label = QLabel("Verify CAPTCHA")
-        captcha_label.setStyleSheet("font-weight: 600; color: #374151;")
+        captcha_label.setStyleSheet(LABEL_STYLE)
         form_layout.addWidget(captcha_label)
         
         # CAPTCHA Image Display
@@ -107,7 +113,7 @@ class LoginView(QDialog):
         
         # CAPTCHA Input
         self.lbl_captcha = QLabel("Enter CAPTCHA Code")
-        self.lbl_captcha.setStyleSheet("font-weight: 600; color: #374151;")
+        self.lbl_captcha.setStyleSheet(LABEL_STYLE)
         self.txt_captcha = QLineEdit()
         self.txt_captcha.setPlaceholderText("Enter the code above (case-insensitive)")
         self.txt_captcha.setMinimumHeight(40)
@@ -165,10 +171,22 @@ class LoginView(QDialog):
         Args:
             image_path (str): Path to CAPTCHA image
         """
+        logger.debug(f"set_captcha_image called with path: {image_path}")
+        
         if os.path.exists(image_path):
+            logger.debug(f"File exists: {image_path}")
             pixmap = QPixmap(image_path)
-            pixmap = pixmap.scaledToWidth(300, Qt.TransformationMode.SmoothTransformation)
-            self.captcha_image_label.setPixmap(pixmap)
+            
+            if pixmap.isNull():
+                logger.error(f"QPixmap failed to load image: {image_path}")
+                self.captcha_image_label.setText("Failed to load CAPTCHA image")
+            else:
+                logger.debug(f"QPixmap loaded successfully, size: {pixmap.width()}x{pixmap.height()}")
+                pixmap = pixmap.scaledToWidth(300, Qt.TransformationMode.SmoothTransformation)
+                self.captcha_image_label.setPixmap(pixmap)
+        else:
+            logger.error(f"File does not exist: {image_path}")
+            self.captcha_image_label.setText("CAPTCHA image not found")
 
     def show_error(self, message, title="Error"):
         QMessageBox.critical(self, title, message)

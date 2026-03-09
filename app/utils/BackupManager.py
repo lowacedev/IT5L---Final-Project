@@ -7,6 +7,7 @@ import os
 import subprocess
 import datetime
 from pathlib import Path
+from typing import Optional
 from app.security.config import SecurityConfig
 from app.utils.logger import get_logger, SecurityAuditLogger
 
@@ -138,7 +139,7 @@ class BackupManager:
                 f"--host={SecurityConfig.DB_HOST}",
                 f"--user={SecurityConfig.DB_USER}",
                 f"--password={SecurityConfig.DB_PASSWORD}",
-                f"--max_allowed_packet=1024M",
+                "--max_allowed_packet=1024M",
                 "-v",  # Verbose to show progress
                 SecurityConfig.DB_NAME
             ]
@@ -191,7 +192,7 @@ class BackupManager:
             }
             
         except subprocess.TimeoutExpired:
-            error_msg = f"Restore exceeded 1 hour timeout - may still be processing"
+            error_msg = "Restore exceeded 1 hour timeout - may still be processing"
             logger.error(error_msg)
             return {
                 'success': False,
@@ -207,7 +208,7 @@ class BackupManager:
             }
     
     @staticmethod
-    def _log_backup_to_db(db_connection, backup_path: str, backup_size: int, success: bool, error_message: str = None):
+    def _log_backup_to_db(db_connection, backup_path: str, backup_size: int, success: bool, error_message: Optional[str] = None):
         """Log backup operation to database"""
         if not db_connection:
             return
@@ -233,7 +234,7 @@ class BackupManager:
             logger.error(f"Failed to log backup to database: {str(e)}")
     
     @staticmethod
-    def _log_restore_to_db(db_connection, backup_file: str, success: bool, error_message: str = None):
+    def _log_restore_to_db(db_connection, backup_file: str, success: bool, error_message: Optional[str] = None):
         """Log restore operation to database"""
         if not db_connection:
             return

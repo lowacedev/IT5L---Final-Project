@@ -2,6 +2,7 @@ from app.exceptions import ValidationError, NotFoundError, DatabaseError
 import logging
 from app.utils.logger import SecurityAuditLogger
 from app.security.input_validator import InputValidator
+from app.controllers.signals import audit_log_signals
 
 
 class InventoryController:
@@ -90,6 +91,9 @@ class InventoryController:
             'create_inventory_item',
             f'Created item: {part_name} (Qty: {quantity}, Price: {selling_price})'
         )
+        
+        # Emit signal to refresh audit logs
+        audit_log_signals.logs_updated.emit()
 
     def _update_and_log_item(self, item_id, part_name, category, brand, model_number, quantity, cost_price, selling_price, supplier_id):
         """Update item and log the action."""
@@ -104,6 +108,9 @@ class InventoryController:
             'update_inventory_item',
             f'Updated item ID {item_id}: {part_name} (Qty: {quantity}, Price: {selling_price})'
         )
+        
+        # Emit signal to refresh audit logs
+        audit_log_signals.logs_updated.emit()
 
     def add_item(self):
         # Check permission for non-admin users
@@ -228,6 +235,9 @@ class InventoryController:
                 f'Stock In - Item ID: {item_id}, Quantity: {qty}, Reason: {reason}'
             )
             
+            # Emit signal to refresh audit logs
+            audit_log_signals.logs_updated.emit()
+            
             self.clear_stock_in_form()
             self.refresh_inventory()
             self.refresh_stock_log()
@@ -270,6 +280,9 @@ class InventoryController:
                 'stock_out', 
                 f'Stock Out - Item ID: {item_id}, Quantity: {qty}, Reason: {reason}'
             )
+            
+            # Emit signal to refresh audit logs
+            audit_log_signals.logs_updated.emit()
             
             self.clear_stock_out_form()
             self.refresh_inventory()

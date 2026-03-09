@@ -107,13 +107,15 @@ class PasswordManager:
 
 # Example usage
 if __name__ == "__main__":
-    test_password = "Test@1234"
+    import os
+    # Test data with environment variable fallback
+    test_password = os.environ.get("TEST_PASSWORD", "SecurePass123")
     
-    # Validate
+    # Validation example
     is_valid, msg = PasswordManager.validate_password_strength(test_password)
     print(f"Password validation: {is_valid} - {msg}")
     
-    # Hash
+    # Hash example
     hashed = PasswordManager.hash_password(test_password)
     print(f"Hashed: {hashed[:50]}...")
     

@@ -4,7 +4,10 @@ Validates and sanitizes user inputs to prevent injection attacks and invalid dat
 """
 
 import re
+import logging
 from typing import Union, Tuple
+
+logger = logging.getLogger(__name__)
 
 class InputValidator:
     """Validates and sanitizes user inputs"""
@@ -14,6 +17,19 @@ class InputValidator:
         r"(?i)(union|select|insert|update|delete|drop|create|alter|exec|execute|script|javascript|onerror|onload)",
         r"(--|;|\/\*|\*\/|xp_|sp_)",  # SQL comments and stored procedures
     ]
+    
+    # Validation message constants
+    VALID_MESSAGE = "is valid"
+    PHONE_VALID = "Phone is valid"
+    EMAIL_VALID = "Email is valid"
+    USERNAME_VALID = "Username is valid"
+    PRICE_VALID = "Price is valid"
+    QUANTITY_VALID = "Quantity is valid"
+    PRODUCT_VALID = "Product name is valid"
+    
+    # Regex pattern constants
+    FORBIDDEN_CHARS_PATTERN = r'[!@#$%^*+={}[\]|\\:;"\u0027<>?~`]'
+    PRODUCT_NAME_PATTERN = r'^[a-zA-Z0-9\s\-/().,&]+$'
     
     @staticmethod
     def validate_username(username: str) -> Tuple[bool, str]:
@@ -39,7 +55,7 @@ class InputValidator:
         if not re.match(r'^[a-zA-Z0-9_.-]+$', username):
             return False, "Username can only contain letters, numbers, dots, underscores, and hyphens"
         
-        return True, "Username is valid"
+        return True, InputValidator.USERNAME_VALID
     
     @staticmethod
     def validate_email(email: str) -> Tuple[bool, str]:
@@ -63,7 +79,7 @@ class InputValidator:
         if not re.match(email_pattern, email):
             return False, "Invalid email format"
         
-        return True, "Email is valid"
+        return True, InputValidator.EMAIL_VALID
     
     @staticmethod
     def validate_phone(phone: str) -> Tuple[bool, str]:
@@ -90,7 +106,7 @@ class InputValidator:
         if len(cleaned) < 10 or len(cleaned) > 15:
             return False, "Phone must be 10-15 digits"
         
-        return True, "Phone is valid"
+        return True, InputValidator.PHONE_VALID
     
     @staticmethod
     def validate_philippine_phone(phone: str) -> Tuple[bool, str]:
@@ -119,7 +135,7 @@ class InputValidator:
         # Format 1: 09XX XXXX XXX (11 digits starting with 0)
         if cleaned.startswith('0'):
             if len(cleaned) == 11:
-                return True, "Phone is valid"
+                return True, InputValidator.PHONE_VALID
             else:
                 return False, f"Philippine number starting with 0 must be 11 digits, got {len(cleaned)}"
         
@@ -127,13 +143,13 @@ class InputValidator:
         elif cleaned.startswith('+63'):
             digits_part = cleaned[3:]  # Remove '+63'
             if len(digits_part) == 10 and digits_part.startswith('9'):
-                return True, "Phone is valid"
+                return True, InputValidator.PHONE_VALID
             else:
                 return False, "Philippine +63 format must have 10 digits starting with 9"
         
         # Format 3: Just 10 digits starting with 9 (assumed PH)
         elif len(cleaned) == 10 and cleaned.startswith('9'):
-            return True, "Phone is valid"
+            return True, InputValidator.PHONE_VALID
         
         else:
             return False, "Phone must be Philippine format: 09XX XXXX XXX, +63 9XX XXXX XXX, or 9XX XXXX XXX"
@@ -187,15 +203,14 @@ class InputValidator:
             return False, "Product name must not exceed 200 characters"
         
         # Forbidden special characters
-        forbidden_chars = r'[!@#$%^*+={}[\]|\\:;"\'<>?~`]'
-        if re.search(forbidden_chars, name):
+        if re.search(InputValidator.FORBIDDEN_CHARS_PATTERN, name):
             return False, "Product name contains forbidden characters: ! @ # $ % ^ * + = { } [ ] | \\ : ; \" ' < > ? ~"
         
         # Allow alphanumeric, spaces, and safe special chars (hyphens, slashes, parentheses, periods, commas)
-        if not re.match(r'^[a-zA-Z0-9\s\-/().,&]+$', name):
+        if not re.match(InputValidator.PRODUCT_NAME_PATTERN, name):
             return False, "Product name contains invalid characters. Use only: letters, numbers, spaces, - / ( ) . , &"
         
-        return True, "Product name is valid"
+        return True, InputValidator.PRODUCT_VALID
     
     @staticmethod
     def validate_price(price: Union[str, float], allow_zero=False) -> Tuple[bool, str]:
@@ -222,7 +237,7 @@ class InputValidator:
             if len(str(price).split('.')[-1]) > 2:
                 return False, "Price must have maximum 2 decimal places"
             
-            return True, "Price is valid"
+            return True, InputValidator.PRICE_VALID
         except (ValueError, TypeError):
             return False, "Price must be a valid number"
     
@@ -246,7 +261,7 @@ class InputValidator:
             if qty > 999999:
                 return False, "Quantity exceeds maximum limit"
             
-            return True, "Quantity is valid"
+            return True, InputValidator.QUANTITY_VALID
         except (ValueError, TypeError):
             return False, "Quantity must be a valid number"
     
@@ -272,12 +287,11 @@ class InputValidator:
             return False, "Category must not exceed 100 characters"
         
         # Check for forbidden special characters
-        forbidden_chars = r'[!@#$%^*+={}[\]|\\:;"\'<>?~`]'
-        if re.search(forbidden_chars, category):
+        if re.search(InputValidator.FORBIDDEN_CHARS_PATTERN, category):
             return False, "Category contains forbidden characters"
         
         # Allow alphanumeric, spaces, and safe special chars
-        if not re.match(r'^[a-zA-Z0-9\s\-/().,&]+$', category):
+        if not re.match(InputValidator.PRODUCT_NAME_PATTERN, category):
             return False, "Category contains invalid characters"
         
         return True, "Category is valid"
@@ -304,12 +318,11 @@ class InputValidator:
             return False, "Brand must not exceed 100 characters"
         
         # Check for forbidden special characters
-        forbidden_chars = r'[!@#$%^*+={}[\]|\\:;"\'<>?~`]'
-        if re.search(forbidden_chars, brand):
+        if re.search(InputValidator.FORBIDDEN_CHARS_PATTERN, brand):
             return False, "Brand contains forbidden characters"
         
         # Allow alphanumeric, spaces, and safe special chars
-        if not re.match(r'^[a-zA-Z0-9\s\-/().,&]+$', brand):
+        if not re.match(InputValidator.PRODUCT_NAME_PATTERN, brand):
             return False, "Brand contains invalid characters"
         
         return True, "Brand is valid"
@@ -336,8 +349,7 @@ class InputValidator:
             return False, "Model number must not exceed 100 characters"
         
         # Check for forbidden special characters
-        forbidden_chars = r'[!@#$%^*+={}[\]|\\:;"\'<>?~`]'
-        if re.search(forbidden_chars, model):
+        if re.search(InputValidator.FORBIDDEN_CHARS_PATTERN, model):
             return False, "Model number contains forbidden characters"
         
         # Allow alphanumeric, spaces, hyphens, and periods (common in model numbers)
@@ -368,12 +380,11 @@ class InputValidator:
             return False, "Supplier name must not exceed 150 characters"
         
         # Check for forbidden special characters
-        forbidden_chars = r'[!@#$%^*+={}[\]|\\:;"\'<>?~`]'
-        if re.search(forbidden_chars, name):
+        if re.search(InputValidator.FORBIDDEN_CHARS_PATTERN, name):
             return False, "Supplier name contains forbidden characters"
         
         # Allow alphanumeric, spaces, and safe special chars
-        if not re.match(r'^[a-zA-Z0-9\s\-/().,&]+$', name):
+        if not re.match(InputValidator.PRODUCT_NAME_PATTERN, name):
             return False, "Supplier name contains invalid characters"
         
         return True, "Supplier name is valid"

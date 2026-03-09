@@ -45,6 +45,16 @@ class AuditLogsView(BaseView):
         # Connect signals
         self.logs_refreshed.connect(self._on_logs_refreshed)
         
+        # Connect to external audit log update signal
+        try:
+            from app.controllers.signals import audit_log_signals
+            audit_log_signals.logs_updated.connect(self._refresh_logs)
+            print("[AuditLogsView] Successfully connected to audit_log_signals")
+        except ImportError as e:
+            print(f"[AuditLogsView] ImportError - signal not available: {e}")
+        except Exception as e:
+            print(f"[AuditLogsView] Error connecting to signal: {e}")
+        
         # Load initial logs and start auto-refresh
         self._refresh_logs()
         self.refresh_timer.start(self.refresh_interval)
@@ -195,6 +205,7 @@ class AuditLogsView(BaseView):
     
     def _refresh_logs(self) -> None:
         """Refresh logs from database"""
+        print("[AuditLogsView._refresh_logs] Called!")
         try:
             logs = self._fetch_logs()
             self.logs_refreshed.emit(logs)
@@ -420,7 +431,7 @@ class AuditLogsView(BaseView):
             for event_type, count in sorted(event_counts.items()):
                 stats_msg += f"  {event_type}: {count}\n"
             
-            stats_msg += f"\nSuccess/Failed:"
+            stats_msg += "\nSuccess/Failed:"
             stats_msg += f"\n  SUCCESS: {status_counts['SUCCESS']}"
             stats_msg += f"\n  FAILED: {status_counts['FAILED']}"
             

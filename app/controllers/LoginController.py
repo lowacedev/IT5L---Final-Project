@@ -272,7 +272,6 @@ class LoginController:
             
             self.view.show_error(error_message)
             self.generate_new_captcha()
-            self.generate_new_captcha()
         except Exception as e:
             self.logger.error(f"Error processing login error: {str(e)}")
             self.view.show_error(f"Error: {str(e)}")

@@ -2,6 +2,7 @@ from app.exceptions import ValidationError, NotFoundError, DatabaseError
 from app.security.input_validator import InputValidator
 from app.security.password_manager import PasswordManager
 from app.utils.logger import SecurityAuditLogger
+from app.controllers.signals import audit_log_signals
 import logging
 
 
@@ -73,6 +74,11 @@ class StaffController:
                 f'Created staff member: {username} (Role: {role})'
             )
             
+            # Emit signal to refresh audit logs
+            print("[StaffController.add_staff] Emitting logs_updated signal...")
+            audit_log_signals.logs_updated.emit()
+            print("[StaffController.add_staff] Signal emitted!")
+            
             self.view.show_success("Staff member added successfully!")
             self.view.clear_form()
             self.load_data()
@@ -134,6 +140,9 @@ class StaffController:
                 f'Updated staff member ID {staff_id}: {username} (Role: {role})'
             )
             
+            # Emit signal to refresh audit logs
+            audit_log_signals.logs_updated.emit()
+            
             self.view.show_success("Staff member updated successfully!")
             self.view.clear_form()
             self.load_data()
@@ -170,6 +179,9 @@ class StaffController:
                 'delete_staff',
                 f'Deleted staff member ID: {staff_id}'
             )
+            
+            # Emit signal to refresh audit logs
+            audit_log_signals.logs_updated.emit()
             
             self.view.show_success("Staff member deleted successfully!")
             self.view.clear_form()

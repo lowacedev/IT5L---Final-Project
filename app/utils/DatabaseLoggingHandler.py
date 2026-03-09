@@ -8,7 +8,7 @@ import logging
 import threading
 from datetime import datetime
 from queue import Queue
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, Union
 
 
 class DatabaseLoggingHandler(logging.Handler):
@@ -79,7 +79,7 @@ class DatabaseLoggingHandler(logging.Handler):
         # Extract structured fields from message
         username = self._extract_field(message, "Username")
         user_id = self._extract_field(message, "User:", is_int=True)
-        action = self._extract_action(message, event_type)
+        action = self._extract_action(message)
         reason = self._extract_field(message, "Reason")
         
         return {
@@ -121,7 +121,7 @@ class DatabaseLoggingHandler(logging.Handler):
                 cleaned = re.sub(pattern2, '', message)
             
             return cleaned if cleaned else message
-        except:
+        except Exception:
             return message
     
     def _extract_resource(self, message: str, event_type: str) -> Optional[str]:
@@ -162,13 +162,12 @@ class DatabaseLoggingHandler(logging.Handler):
         
         return None
     
-    def _extract_action(self, message: str, event_type: str) -> Optional[str]:
+    def _extract_action(self, message: str) -> Optional[str]:
         """
         Extract action being performed.
         
         Args:
             message: Log message
-            event_type: Type of event
             
         Returns:
             Action name (create, update, delete, login, etc.)
@@ -199,7 +198,7 @@ class DatabaseLoggingHandler(logging.Handler):
         
         return None
     
-    def _extract_field(self, message: str, field_name: str, is_int: bool = False) -> Optional[str]:
+    def _extract_field(self, message: str, field_name: str, is_int: bool = False) -> Optional[Union[int, str]]:
         """
         Extract field value from log message.
         
@@ -209,7 +208,7 @@ class DatabaseLoggingHandler(logging.Handler):
             is_int: Convert to int if True
             
         Returns:
-            Extracted value or None
+            Extracted value (int or str) or None
         """
         try:
             if field_name in message:
@@ -225,8 +224,10 @@ class DatabaseLoggingHandler(logging.Handler):
                         end = pos
                 
                 value = message[start:end].strip()
-                return int(value) if is_int and value.isdigit() else (value if value else None)
-        except:
+                if is_int and value.isdigit():
+                    return int(value)
+                return value if value else None
+        except Exception:
             pass
         return None
     
@@ -281,7 +282,7 @@ class DatabaseLoggingHandler(logging.Handler):
             try:
                 import sys
                 print(f"[WARNING] Database logging failed: {str(e)}", file=sys.stderr)
-            except:
+            except Exception:
                 pass
     
     def _write_auth_log(self, cursor, log_data: Dict[str, Any]) -> None:
@@ -442,7 +443,7 @@ class DatabaseLoggingHandler(logging.Handler):
             try:
                 log_data = self.log_queue.get_nowait()
                 self._write_to_database(log_data)
-            except:
+            except Exception:
                 break
         
         # Wait for worker thread

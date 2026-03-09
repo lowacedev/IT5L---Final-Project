@@ -1,5 +1,6 @@
 from app.exceptions import ValidationError, NotFoundError, DatabaseError
 from app.utils.logger import SecurityAuditLogger
+from app.controllers.signals import audit_log_signals
 
 
 class SupplierController:
@@ -23,6 +24,48 @@ class SupplierController:
         except Exception as e:
             self.view.show_error(f"Failed to load suppliers: {str(e)}")
 
+    def _validate_supplier_form_data(self, name, contact_person, email, phone, address):
+        """Validate supplier form fields. Returns error message if invalid, None if valid."""
+        from app.security.input_validator import InputValidator
+        
+        # Check all fields are not empty
+        if not name or not name.strip():
+            return "Supplier name is required"
+        
+        if not contact_person or not contact_person.strip():
+            return "Contact person is required"
+        
+        if not email or not email.strip():
+            return "Email is required"
+        
+        if not phone or not phone.strip():
+            return "Phone is required"
+        
+        if not address or not address.strip():
+            return "Address is required"
+        
+        # Validate supplier name
+        is_valid, msg = InputValidator.validate_supplier_name(name)
+        if not is_valid:
+            return f"Supplier name: {msg}"
+        
+        # Validate contact person
+        is_valid, msg = InputValidator.validate_contact_person(contact_person)
+        if not is_valid:
+            return f"Contact person: {msg}"
+        
+        # Validate email
+        is_valid, msg = InputValidator.validate_email(email)
+        if not is_valid:
+            return f"Email: {msg}"
+        
+        # Validate phone - PHILIPPINE FORMAT
+        is_valid, msg = InputValidator.validate_philippine_phone(phone)
+        if not is_valid:
+            return f"Phone: {msg}"
+        
+        return None
+
     def add_supplier(self):
         data = self.view.collect_form_data()
         if data is None:
@@ -30,52 +73,10 @@ class SupplierController:
         
         name, contact_person, email, phone, address = data
         
-        # Validate input fields - ALL REQUIRED
-        from app.security.input_validator import InputValidator
-        
-        # Check all fields are not empty
-        if not name or not name.strip():
-            self.view.show_error("Supplier name is required")
-            return
-        
-        if not contact_person or not contact_person.strip():
-            self.view.show_error("Contact person is required")
-            return
-        
-        if not email or not email.strip():
-            self.view.show_error("Email is required")
-            return
-        
-        if not phone or not phone.strip():
-            self.view.show_error("Phone is required")
-            return
-        
-        if not address or not address.strip():
-            self.view.show_error("Address is required")
-            return
-        
-        # Validate supplier name
-        is_valid, msg = InputValidator.validate_supplier_name(name)
-        if not is_valid:
-            self.view.show_error(f"Supplier name: {msg}")
-            return
-        
-        # Validate contact person
-        is_valid, msg = InputValidator.validate_contact_person(contact_person)
-        if not is_valid:
-            self.view.show_error(f"Contact person: {msg}")
-            return
-        
-        # Validate email
-        is_valid, msg = InputValidator.validate_email(email)
-        if not is_valid:
-            self.view.show_error(f"Email: {msg}")
-            return
-        
-        # Validate phone - PHILIPPINE FORMAT
-        is_valid, msg = InputValidator.validate_philippine_phone(phone)
-        if not is_valid:
-            self.view.show_error(f"Phone: {msg}")
+        # Validate input fields
+        validation_error = self._validate_supplier_form_data(name, contact_person, email, phone, address)
+        if validation_error:
+            self.view.show_error(validation_error)
             return
         
         try:
@@ -88,6 +89,11 @@ class SupplierController:
                 'create_supplier',
                 f'Created supplier: {name} (Contact: {contact_person})'
             )
+            
+            # Emit signal to refresh audit logs
+            print("[SupplierController.add_supplier] Emitting logs_updated signal...")
+            audit_log_signals.logs_updated.emit()
+            print("[SupplierController.add_supplier] Signal emitted!")
             
             self.view.show_success("Supplier added successfully!")
             self.view.clear_form()
@@ -107,52 +113,10 @@ class SupplierController:
         
         supplier_id, name, contact_person, email, phone, address = data_with_id
         
-        # Validate input fields - ALL REQUIRED
-        from app.security.input_validator import InputValidator
-        
-        # Check all fields are not empty
-        if not name or not name.strip():
-            self.view.show_error("Supplier name is required")
-            return
-        
-        if not contact_person or not contact_person.strip():
-            self.view.show_error("Contact person is required")
-            return
-        
-        if not email or not email.strip():
-            self.view.show_error("Email is required")
-            return
-        
-        if not phone or not phone.strip():
-            self.view.show_error("Phone is required")
-            return
-        
-        if not address or not address.strip():
-            self.view.show_error("Address is required")
-            return
-        
-        # Validate supplier name
-        is_valid, msg = InputValidator.validate_supplier_name(name)
-        if not is_valid:
-            self.view.show_error(f"Supplier name: {msg}")
-            return
-        
-        # Validate contact person
-        is_valid, msg = InputValidator.validate_contact_person(contact_person)
-        if not is_valid:
-            self.view.show_error(f"Contact person: {msg}")
-            return
-        
-        # Validate email
-        is_valid, msg = InputValidator.validate_email(email)
-        if not is_valid:
-            self.view.show_error(f"Email: {msg}")
-            return
-        
-        # Validate phone - PHILIPPINE FORMAT
-        is_valid, msg = InputValidator.validate_philippine_phone(phone)
-        if not is_valid:
-            self.view.show_error(f"Phone: {msg}")
+        # Validate input fields
+        validation_error = self._validate_supplier_form_data(name, contact_person, email, phone, address)
+        if validation_error:
+            self.view.show_error(validation_error)
             return
         
         if not self.view.ask_confirmation("Are you sure you want to update this supplier?"):
@@ -168,6 +132,9 @@ class SupplierController:
                 'update_supplier',
                 f'Updated supplier ID {supplier_id}: {name}'
             )
+            
+            # Emit signal to refresh audit logs
+            audit_log_signals.logs_updated.emit()
             
             self.view.show_success("Supplier updated successfully!")
             self.view.clear_form()
@@ -200,6 +167,9 @@ class SupplierController:
                 'delete_supplier',
                 f'Deleted supplier ID: {supplier_id}'
             )
+            
+            # Emit signal to refresh audit logs
+            audit_log_signals.logs_updated.emit()
             
             self.view.show_success("Supplier deleted successfully!")
             self.view.clear_form()

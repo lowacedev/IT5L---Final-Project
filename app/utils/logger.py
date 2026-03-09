@@ -8,7 +8,6 @@ import logging.handlers
 import os
 from datetime import datetime
 from pathlib import Path
-from app.security.config import SecurityConfig
 
 class SecurityLogger:
     """Centralized logger for application"""
@@ -24,6 +23,9 @@ class SecurityLogger:
         Args:
             db_connection: Optional database connection for database logging
         """
+        # Import here to avoid circular import
+        from app.security.config import SecurityConfig
+        
         # Create logs directory if it doesn't exist
         log_dir = Path(SecurityConfig.LOG_FILE).parent
         log_dir.mkdir(parents=True, exist_ok=True)
@@ -97,10 +99,13 @@ def get_logger(name: str) -> logging.Logger:
 class SecurityAuditLogger:
     """Audit logger for security-related events"""
     
+    # Logger names
+    SECURITY_AUTH = 'SECURITY.AUTH'
+    
     @staticmethod
     def log_login_attempt(username: str, success: bool, ip_address: str = None, reason: str = None):
         """Log login attempt"""
-        logger = get_logger('SECURITY.AUTH')
+        logger = get_logger(SecurityAuditLogger.SECURITY_AUTH)
         status = "SUCCESS" if success else "FAILED"
         message = f"Login attempt [{status}] - Username: {username}"
         if ip_address:
@@ -116,19 +121,19 @@ class SecurityAuditLogger:
     @staticmethod
     def log_account_lockout(username: str, reason: str = "Max login attempts exceeded"):
         """Log account lockout"""
-        logger = get_logger('SECURITY.AUTH')
+        logger = get_logger(SecurityAuditLogger.SECURITY_AUTH)
         logger.critical(f"Account locked - Username: {username} - Reason: {reason}")
     
     @staticmethod
     def log_account_unlock(username: str):
         """Log account unlock"""
-        logger = get_logger('SECURITY.AUTH')
+        logger = get_logger(SecurityAuditLogger.SECURITY_AUTH)
         logger.info(f"Account unlocked - Username: {username}")
     
     @staticmethod
     def log_password_change(username: str, success: bool):
         """Log password change"""
-        logger = get_logger('SECURITY.AUTH')
+        logger = get_logger(SecurityAuditLogger.SECURITY_AUTH)
         status = "SUCCESS" if success else "FAILED"
         logger.info(f"Password change [{status}] - Username: {username}")
     

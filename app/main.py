@@ -38,7 +38,7 @@ def main():
         
         user_service = SecureUserService(db)
         login_view = LoginView()
-        LoginController(user_service, login_view)
+        login_controller = LoginController(user_service, login_view) 
         
         if login_view.exec() == LoginView.DialogCode.Accepted:
             user = login_view.logged_in_user

@@ -30,7 +30,7 @@ class StaffService:
     def create_staff(self, full_name, username, password, role, performed_by=None):
         """Create a new staff member with proper validation and password hashing"""
         # Validate input
-        self._validate_staff_data(full_name, username, password, role)
+        self._validate_staff_data(full_name, username, password)
         
         if not full_name or len(full_name.strip()) < 2:
             raise ValidationError("Full name must be at least 2 characters")
@@ -81,7 +81,7 @@ class StaffService:
 
     def update_staff(self, staff_id, full_name, username, password, role, performed_by=None):
         """Update staff member with password hashing if password provided"""
-        self._validate_staff_data(full_name, username, password, role, allow_empty_password=True)
+        self._validate_staff_data(full_name, username, password, allow_empty_password=True)
         
         if not full_name or len(full_name.strip()) < 2:
             raise ValidationError("Full name must be at least 2 characters")

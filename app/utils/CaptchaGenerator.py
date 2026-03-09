@@ -6,9 +6,12 @@ Generates CAPTCHA images for login verification
 import os
 import random
 import string
+import logging
 from io import BytesIO
 from PIL import Image, ImageDraw, ImageFont, ImageFilter
 from typing import Tuple
+
+logger = logging.getLogger(__name__)
 
 
 class CaptchaGenerator:
@@ -133,25 +136,35 @@ class CaptchaGenerator:
         
         Args:
             code (str): CAPTCHA code (generates new if not provided)
-            output_path (str): Path to save image (uses temp if not provided)
+            output_path (str): Path to save image (uses default if not provided)
             
         Returns:
             str: Path to saved image
         """
-        # Generate image
-        image = self.generate_image(code)
-        
-        # Determine output path
-        if output_path is None:
-            import tempfile
-            temp_dir = tempfile.gettempdir()
-            output_path = os.path.join(temp_dir, 'captcha_current.png')
-        
-        # Save image
-        image.save(output_path, 'PNG')
-        self.current_image_path = output_path
-        
-        return output_path
+        try:
+            # Generate image
+            image = self.generate_image(code)
+            logger.debug(f"Generated CAPTCHA image with code: {self.current_code}")
+            
+            # Determine output path
+            if output_path is None:
+                # Use project's temp directory instead of system temp
+                project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+                captcha_dir = os.path.join(project_root, '.captcha')
+                os.makedirs(captcha_dir, exist_ok=True)
+                output_path = os.path.join(captcha_dir, 'captcha_current.png')
+            
+            logger.debug(f"Saving CAPTCHA to: {output_path}")
+            
+            # Save image
+            image.save(output_path, 'PNG')
+            self.current_image_path = output_path
+            logger.debug(f"CAPTCHA saved successfully: {output_path}")
+            
+            return output_path
+        except Exception as e:
+            logger.error(f"Error generating CAPTCHA image: {str(e)}", exc_info=True)
+            raise
     
     def get_code_bytes(self, code: str = None) -> bytes:
         """

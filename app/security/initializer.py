@@ -33,7 +33,7 @@ class SecurityInitializer:
         # Initialize encryption
         print("[SECURITY] Initializing encryption...")
         try:
-            enc = get_encryption()
+            get_encryption()
             logger.info("Encryption initialized successfully")
         except Exception as e:
             logger.critical(f"Encryption initialization failed: {e}")

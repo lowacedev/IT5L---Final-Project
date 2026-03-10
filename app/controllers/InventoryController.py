@@ -86,10 +86,12 @@ class InventoryController:
         )
         
         username = self.user.get('username') if self.user else 'unknown'
+        user_id = self.user.get('id') if self.user else None
         SecurityAuditLogger.log_user_action(
             username,
             'create_inventory_item',
-            f'Created item: {part_name} (Qty: {quantity}, Price: {selling_price})'
+            f'Created item: {part_name} (Qty: {quantity}, Price: {selling_price})',
+            user_id=user_id
         )
         
         # Emit signal to refresh audit logs
@@ -103,10 +105,12 @@ class InventoryController:
         )
         
         username = self.user.get('username') if self.user else 'unknown'
+        user_id = self.user.get('id') if self.user else None
         SecurityAuditLogger.log_user_action(
             username,
             'update_inventory_item',
-            f'Updated item ID {item_id}: {part_name} (Qty: {quantity}, Price: {selling_price})'
+            f'Updated item ID {item_id}: {part_name} (Qty: {quantity}, Price: {selling_price})',
+            user_id=user_id
         )
         
         # Emit signal to refresh audit logs
@@ -232,7 +236,8 @@ class InventoryController:
             SecurityAuditLogger.log_user_action(
                 username, 
                 'stock_in', 
-                f'Stock In - Item ID: {item_id}, Quantity: {qty}, Reason: {reason}'
+                f'Stock In - Item ID: {item_id}, Quantity: {qty}, Reason: {reason}',
+                user_id=user_id
             )
             
             # Emit signal to refresh audit logs
@@ -278,7 +283,8 @@ class InventoryController:
             SecurityAuditLogger.log_user_action(
                 username, 
                 'stock_out', 
-                f'Stock Out - Item ID: {item_id}, Quantity: {qty}, Reason: {reason}'
+                f'Stock Out - Item ID: {item_id}, Quantity: {qty}, Reason: {reason}',
+                user_id=user_id
             )
             
             # Emit signal to refresh audit logs

@@ -68,10 +68,12 @@ class StaffController:
             self.service.create_staff(full_name, username, password, role, performed_by=performed_by)
             
             # Log user action
+            current_user_id = self.current_user.get('id') if self.current_user else None
             SecurityAuditLogger.log_user_action(
                 performed_by or 'unknown',
                 'create_staff',
-                f'Created staff member: {username} (Role: {role})'
+                f'Created staff member: {username} (Role: {role})',
+                user_id=current_user_id
             )
             
             # Emit signal to refresh audit logs
@@ -134,10 +136,12 @@ class StaffController:
             self.service.update_staff(staff_id, full_name, username, password if password else "", role, performed_by=performed_by)
             
             # Log user action
+            current_user_id = self.current_user.get('id') if self.current_user else None
             SecurityAuditLogger.log_user_action(
                 performed_by or 'unknown',
                 'update_staff',
-                f'Updated staff member ID {staff_id}: {username} (Role: {role})'
+                f'Updated staff member ID {staff_id}: {username} (Role: {role})',
+                user_id=current_user_id
             )
             
             # Emit signal to refresh audit logs
@@ -174,10 +178,12 @@ class StaffController:
             self.service.delete_staff(staff_id, performed_by=performed_by)
             
             # Log user action
+            current_user_id = self.current_user.get('id') if self.current_user else None
             SecurityAuditLogger.log_user_action(
                 performed_by or 'unknown',
                 'delete_staff',
-                f'Deleted staff member ID: {staff_id}'
+                f'Deleted staff member ID: {staff_id}',
+                user_id=current_user_id
             )
             
             # Emit signal to refresh audit logs

@@ -84,10 +84,12 @@ class SupplierController:
             self.service.create_supplier(name, contact_person, email, phone, address, performed_by=performed_by)
             
             # Log user action
+            current_user_id = self.current_user.get('id') if self.current_user else None
             SecurityAuditLogger.log_user_action(
                 performed_by or 'unknown',
                 'create_supplier',
-                f'Created supplier: {name} (Contact: {contact_person})'
+                f'Created supplier: {name} (Contact: {contact_person})',
+                user_id=current_user_id
             )
             
             # Emit signal to refresh audit logs
@@ -127,10 +129,12 @@ class SupplierController:
             self.service.update_supplier(supplier_id, name, contact_person, email, phone, address, performed_by=performed_by)
             
             # Log user action
+            current_user_id = self.current_user.get('id') if self.current_user else None
             SecurityAuditLogger.log_user_action(
                 performed_by or 'unknown',
                 'update_supplier',
-                f'Updated supplier ID {supplier_id}: {name}'
+                f'Updated supplier ID {supplier_id}: {name}',
+                user_id=current_user_id
             )
             
             # Emit signal to refresh audit logs
@@ -162,10 +166,12 @@ class SupplierController:
             self.service.delete_supplier(supplier_id, performed_by=performed_by)
             
             # Log user action
+            current_user_id = self.current_user.get('id') if self.current_user else None
             SecurityAuditLogger.log_user_action(
                 performed_by or 'unknown',
                 'delete_supplier',
-                f'Deleted supplier ID: {supplier_id}'
+                f'Deleted supplier ID: {supplier_id}',
+                user_id=current_user_id
             )
             
             # Emit signal to refresh audit logs

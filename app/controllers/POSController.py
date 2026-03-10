@@ -219,11 +219,13 @@ class POSController:
             
             # Log user action
             username = self.user.get('username') if self.user else 'unknown'
+            user_id = self.user.get('id') if self.user else None
             num_items = len(self.cart) if self.cart else 0
             SecurityAuditLogger.log_user_action(
                 username,
                 'pos_checkout',
-                f'Completed sale ID {sale_id}: {num_items} items, Total: Php {total:,.2f}, Payment: {payment_mode}'
+                f'Completed sale ID {sale_id}: {num_items} items, Total: Php {total:,.2f}, Payment: {payment_mode}',
+                user_id=user_id
             )
             
             self.view.show_success("Transaction completed successfully")

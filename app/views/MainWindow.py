@@ -385,7 +385,9 @@ class MainWindow(QMainWindow):
             db = get_db()
             user_service = SecureUserService(db)
             login_view = LoginView()
-            LoginController(user_service, login_view)
+            login_controller = LoginController(user_service, login_view)
+            # Keep reference to prevent garbage collection
+            self._login_controller = login_controller
             
             if login_view.exec() == QDialog.DialogCode.Accepted:
                 new_user = login_view.logged_in_user

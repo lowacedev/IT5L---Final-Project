@@ -196,5 +196,13 @@ class LoginView(QDialog):
 
     def show_success(self, message):
         QMessageBox.information(self, "Success", message)
+    
+    def showEvent(self, event):
+        """Reset button state when dialog is shown"""
+        super().showEvent(event)
+        # Ensure login button is enabled when dialog is shown
+        self.btn_login.setEnabled(True)
+        self.btn_login.setText("Login")
+        self.btn_refresh_captcha.setEnabled(True)
 
 

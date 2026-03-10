@@ -78,7 +78,7 @@ class DatabaseLoggingHandler(logging.Handler):
         
         # Extract structured fields from message
         username = self._extract_field(message, "Username")
-        user_id = self._extract_field(message, "User:", is_int=True)
+        user_id = self._extract_field(message, "UserId", is_int=True)
         action = self._extract_action(message)
         reason = self._extract_field(message, "Reason")
         
@@ -231,6 +231,38 @@ class DatabaseLoggingHandler(logging.Handler):
             pass
         return None
     
+    def _extract_clean_details(self, message: str) -> str:
+        """
+        Extract only the meaningful details part from message, removing redundant fields.
+        For messages like: "Username: armel - UserId: 23 - Created item: X"
+        Returns: "Created item: X"
+        
+        Args:
+            message: Full log message
+            
+        Returns:
+            Clean details message
+        """
+        try:
+            # Find the last " - " which separates UserId from actual details
+            if "UserId:" in message:
+                # Find position after "UserId: NN - "
+                userid_pos = message.find("UserId:")
+                if userid_pos != -1:
+                    # Find the " - " after UserId value
+                    dash_pos = message.find(" - ", userid_pos)
+                    if dash_pos != -1:
+                        # Return everything after this dash
+                        return message[dash_pos + 3:]
+            # Fallback: if no UserId, look for the last " - "
+            dash_pos = message.rfind(" - ")
+            if dash_pos != -1:
+                return message[dash_pos + 3:]
+            # Final fallback: return whole message
+            return message
+        except Exception:
+            return message
+    
     def _process_logs(self) -> None:
         """Process queued logs and write to database"""
         import time
@@ -345,12 +377,16 @@ class DatabaseLoggingHandler(logging.Handler):
         ))
     
     def _write_user_activity_log(self, cursor, log_data: Dict[str, Any]) -> None:
-        """Write user activity log - fallback to general audit log if user_id is missing"""
+        """Write user activity log to both user_activity_logs and security_audit_logs"""
         # If user_id is not available, write to general audit log instead
         if not log_data.get('user_id'):
             self._write_general_audit_log(cursor, log_data)
             return
         
+        # Extract clean details (remove redundant username/userid info from message)
+        clean_details = self._extract_clean_details(log_data['message'])
+        
+        # Write to user_activity_logs table
         sql = """
         INSERT INTO user_activity_logs
         (username, user_id, action, module, details, timestamp)
@@ -362,7 +398,23 @@ class DatabaseLoggingHandler(logging.Handler):
             log_data['user_id'],
             log_data['action'],
             log_data['module'],
-            log_data['message'],
+            clean_details,
+            log_data['timestamp']
+        ))
+        
+        # Also write to security_audit_logs for comprehensive audit trail
+        audit_sql = """
+        INSERT INTO security_audit_logs
+        (event_type, username, user_id, action, details, timestamp)
+        VALUES (%s, %s, %s, %s, %s, %s)
+        """
+        
+        cursor.execute(audit_sql, (
+            log_data['module'],  # Use module as event_type (e.g., INVENTORY, STAFF, SUPPLIER, POS)
+            log_data['username'],
+            log_data['user_id'],
+            log_data['action'],
+            clean_details,
             log_data['timestamp']
         ))
     

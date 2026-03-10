@@ -144,12 +144,25 @@ class SecurityAuditLogger:
         logger.warning(f"Unauthorized access attempt - User: {user} - Resource: {resource} - Action: {action}")
     
     @staticmethod
-    def log_user_action(user: str, action: str, details: str = None):
-        """Log user action"""
+    def log_user_action(user: str, action: str, details: str = None, user_id: int = None):
+        """Log user action
+        
+        Args:
+            user: Username
+            action: Action being performed
+            details: Optional action details
+            user_id: Optional user ID for database tracking
+        """
         logger = get_logger('SECURITY.AUDIT')
-        message = f"User action - User: {user} - Action: {action}"
+        # Message format: include username and UserId for extraction, rest is details
+        # username, action, user_id are already stored in separate columns
+        message = f"Username: {user}"
+        if user_id:
+            message += f" - UserId: {user_id}"
         if details:
-            message += f" - Details: {details}"
+            message += f" - {details}"
+        else:
+            message += f" - {action}"
         logger.info(message)
     
     @staticmethod

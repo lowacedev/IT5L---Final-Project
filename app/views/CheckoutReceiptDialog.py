@@ -347,7 +347,7 @@ class CheckoutReceiptDialog(QDialog):
                     """)
             else:
                 self.change = 0
-                self.change_val_label.setText(f"₱0.00")
+                self.change_val_label.setText("₱0.00")
                 self.change_val_label.setStyleSheet("color: #1e40af; background: transparent; border: none; font-weight: bold;")
                 self.amount_received_input.setStyleSheet("""
                     QLineEdit {
@@ -366,7 +366,7 @@ class CheckoutReceiptDialog(QDialog):
                 """)
         except ValueError:
             self.change = 0
-            self.change_val_label.setText(f"₱0.00 (Invalid)")
+            self.change_val_label.setText("₱0.00 (Invalid)")
             self.change_val_label.setStyleSheet("color: #dc2626; background: transparent; border: none;")
             self.amount_received_input.setStyleSheet("""
                 QLineEdit {

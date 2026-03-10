@@ -14,13 +14,16 @@ class SecurityInitializer:
     @staticmethod
     def initialize():
         """Initialize all security features"""
-        from app.utils.logger import SecurityLogger
+        from app.utils.logger import SecurityLogger, get_logger
         
         print("[SECURITY] Initializing security features...")
         
         # Setup logging
         print("[SECURITY] Setting up logging...")
         SecurityLogger.setup_logging()
+        
+        # Get logger for use in this method
+        logger = get_logger('SECURITY.INIT')
         
         # Validate security configuration
         print("[SECURITY] Validating security configuration...")
@@ -60,6 +63,9 @@ class SecurityInitializer:
     @staticmethod
     def _create_directories():
         """Create required application directories"""
+        from app.utils.logger import get_logger
+        
+        logger = get_logger('SECURITY.INIT')
         directories = [
             Path(SecurityConfig.LOG_FILE).parent,
             Path(SecurityConfig.BACKUP_DIR),

@@ -151,6 +151,9 @@ class LoginController:
         view.btn_login.clicked.connect(self.handle_login)
         view.btn_refresh_captcha.clicked.connect(self.refresh_captcha)
         
+        # Also connect dialog close to cleanup
+        view.finished.connect(self.cleanup)
+        
         # Generate initial CAPTCHA
         self.generate_new_captcha()
     
@@ -178,6 +181,11 @@ class LoginController:
     def handle_login(self):
         """Handle login button click - minimal work on main thread"""
         try:
+            # If a login is already in progress, don't allow another one
+            if self.auth_worker is not None and self.auth_worker.isRunning():
+                self.logger.warning("Login already in progress, ignoring duplicate click")
+                return
+            
             username, password, captcha_input = self.view.collect_form_data()
             
             # Only check if fields exist on main thread (fast check)
@@ -281,4 +289,16 @@ class LoginController:
         """Reset login button to default state"""
         self.view.btn_login.setEnabled(True)
         self.view.btn_login.setText("Login")
+    
+    def cleanup(self):
+        """Clean up resources when dialog is closed"""
+        try:
+            # Stop and wait for worker thread if it's running
+            if self.auth_worker is not None and self.auth_worker.isRunning():
+                self.logger.info("Stopping authentication worker thread...")
+                self.auth_worker.quit()
+                self.auth_worker.wait(timeout=5000)  # Wait up to 5 seconds
+                self.logger.info("Worker thread stopped")
+        except Exception as e:
+            self.logger.error(f"Error during cleanup: {str(e)}")
 
